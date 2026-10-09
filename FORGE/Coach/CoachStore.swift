@@ -248,6 +248,7 @@ final class CoachStore {
         try? ctx.save()
         minutesOverrides[DayKey.of(.now)] = nil
         RestAlerts.cancel()
+        if SyncedSettings.crewBeta { Task { await CrewService.shared.postCheckIns(from: ctx) } }
         return session
     }
 }

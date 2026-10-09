@@ -1,60 +1,210 @@
+<div align="center">
+
+<img src="docs/icon.png" width="128" alt="FORGE app icon">
+
 # FORGE
 
-A strength-training app in the spirit of PUSH. An on-device Apple Intelligence coach picks today's session from muscle readiness, your training days, your gym's equipment and what you've told it ("squats make me lightheaded").
+**An adaptive strength coach for iPhone and Apple Watch, powered by on-device AI.**
 
-## Run it
+FORGE plans each session from your recovery, schedule, equipment and feedback,<br>
+sets a weight target for every lift, and saves every workout to Apple Health.
+
+![iOS 26+](https://img.shields.io/badge/iOS-26%2B-111214?logo=apple&logoColor=white)
+![watchOS 26+](https://img.shields.io/badge/watchOS-26%2B-111214?logo=apple&logoColor=white)
+![Swift](https://img.shields.io/badge/Swift-SwiftUI%20%C2%B7%20SwiftData-FF6B2C?logo=swift&logoColor=white)
+![AI](https://img.shields.io/badge/AI-Foundation%20Models%20(on--device)-FF6B2C)
+![Status](https://img.shields.io/badge/status-pre--alpha-555)
+
+</div>
+
+<p align="center">
+  <img src="docs/screenshots/today.png" width="19%" alt="Today: coach pick">
+  <img src="docs/screenshots/coach.png" width="19%" alt="AI Coach chat">
+  <img src="docs/screenshots/plan.png" width="19%" alt="Adapted plan">
+  <img src="docs/screenshots/active-set.png" width="19%" alt="Logging a set">
+  <img src="docs/screenshots/crew.png" width="19%" alt="Crew streaks">
+</p>
+
+<p align="center"><sub>Design mockups. The SwiftUI app follows the same layout and theme.</sub></p>
+
+---
+
+## Contents
+
+- [Highlights](#highlights)
+- [How the AI Coach works](#how-the-ai-coach-works)
+- [Architecture](#architecture)
+- [Getting started](#getting-started)
+- [Testing](#testing)
+- [Privacy](#privacy)
+- [Project layout](#project-layout)
+- [Roadmap](#roadmap)
+
+## Highlights
+
+| | |
+|---|---|
+| **AI Coach, on device** | Picks today's session from muscle readiness, your split and training days. Built on Apple's Foundation Models framework with guided generation and tool calling. Runs privately on the iPhone; a rule-based coach takes over when Apple Intelligence is off. |
+| **Learns your limits** | Tell it *"squats make me lightheaded"* and it saves a note, rules out bar-on-spine and heavy standing lifts, swaps in supported movements, lengthens rest and adds a "stand up slowly" cue. |
+| **Equipment-aware** | Gym profiles (home, commercial, travel). The coach only programs what that gym has, so a leg press becomes bench step-ups at home. |
+| **Progressive overload** | Double progression gives each lift a weight + rep target. Your RPE and the "how did it feel" check-in after each workout nudge load and volume up or down. |
+| **Plans the week** | Every upcoming training day gets a plan that accounts for the days before it. Ask the coach to *"make Saturday shorter"* and only Saturday is rebuilt. |
+| **Form guides** | Every exercise has a description, setup and movement steps, and common mistakes. |
+| **Apple Health + Fitness** | Workouts run as real `HKWorkoutSession`s with live heart rate and calories. Each set is saved as a workout segment, and finished workouts appear in Fitness. |
+| **Apple Watch** | Today's plan on the wrist, Digital Crown set logging, rest timer and live heart rate. |
+| **History** | Weekly volume, week streaks, every past workout, and an estimated 1-rep max chart for each lift. |
+| **Crews (beta)** | Weekly streaks with friends over CloudKit sharing. No server. Crews see check-ins only. |
+| **Siri + Shortcuts** | *"What's today's workout in FORGE"* · *"Log a set in FORGE"* |
+| **Syncs everywhere** | SwiftData + CloudKit across iPhone, iPad and Watch. Settings sync through iCloud key-value storage. |
+
+<details>
+<summary><b>More screens</b></summary>
+<br>
+<p align="center">
+  <img src="docs/screenshots/form-guide.png" width="24%" alt="Form guide">
+  <img src="docs/screenshots/summary.png" width="24%" alt="Workout summary">
+  <img src="docs/screenshots/history.png" width="24%" alt="History and progress">
+  <img src="docs/screenshots/week.png" width="24%" alt="Week planning">
+</p>
+<p align="center">
+  <img src="docs/screenshots/watch.png" width="208" alt="Apple Watch set logging">
+</p>
+</details>
+
+## How the AI Coach works
+
+The model never chooses freely from every exercise. It only works within options the app has already checked.
+
+1. **Context.** `CoachStore` builds a `CoachContext` with muscle readiness (from logged sets, about 72 h to recover), the week so far, sleep and HRV from HealthKit, the active gym's equipment, coach notes, recent RPE and how your last sessions felt.
+2. **Generate.** `AppleIntelligenceCoach` opens a `LanguageModelSession` and asks for a `@Generable GeneratedDayPlan`. The model calls the `findExercises(muscle:)` tool, which only returns exercises the gym supports and no note rules out.
+3. **Finish.** Every plan, AI or rule-based, goes through `PlanFinisher`. It validates names against the catalog, clamps sets to your experience level, eases or pushes volume based on feedback, adds "replaces back squat" labels, and attaches a `Progression` weight target to each lift.
+4. **Chat.** Messages return a `@Generable GeneratedReply`. It decides whether the message is lasting feedback, which `MovementFlag`s to avoid, which day it applies to, and whether to rebuild.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  subgraph iPhone
+    UI[SwiftUI views] --> Store[CoachStore]
+    Store --> AI[AppleIntelligenceCoach<br/>Foundation Models]
+    Store --> Rules[RuleBasedCoach]
+    AI --> Finisher[PlanFinisher + Progression]
+    Rules --> Finisher
+    UI --> Tracker[WorkoutTracker<br/>HKWorkoutSession]
+    UI --> Crew[CrewService]
+  end
+  subgraph Watch[Apple Watch]
+    WUI[Watch views] --> WTracker[WorkoutTracker]
+  end
+  Finisher --> Data[(SwiftData)]
+  UI --> Data
+  WUI --> Data
+  Data <--> CK[(iCloud · CloudKit<br/>private database)]
+  Crew <--> Shared[(CloudKit<br/>zone-wide share)]
+  Tracker --> Health[(Apple Health / Fitness)]
+  WTracker --> Health
+```
+
+| Layer | Technology |
+|---|---|
+| UI | SwiftUI, Swift Charts, App Intents |
+| AI | Foundation Models (guided generation, tool calling), rule-based fallback |
+| Data | SwiftData with CloudKit private database, `NSUbiquitousKeyValueStore` |
+| Health | HealthKit: `HKWorkoutSession`, `HKLiveWorkoutBuilder`, sleep and HRV queries |
+| Social | CloudKit zone-wide `CKShare`, zone/database subscriptions |
+| Tests | Swift Testing |
+
+## Getting started
+
+### Requirements
+
+- Xcode 26 or later
+- iPhone with iOS 26+. The AI Coach needs an Apple Intelligence-capable device with Apple Intelligence turned on.
+- Apple Watch with watchOS 26+ (optional)
+- An Apple Developer account, for HealthKit, iCloud and push entitlements
+- [XcodeGen](https://github.com/yonaskolb/XcodeGen)
+
+### Build
 
 ```sh
-brew install xcodegen      # once
-cd ~/Developer/FORGE
-xcodegen                   # writes FORGE.xcodeproj from project.yml
+brew install xcodegen
+git clone https://github.com/tajshaik24/forge.git
+cd forge
+xcodegen            # generates FORGE.xcodeproj from project.yml
 open FORGE.xcodeproj
 ```
 
-Requirements: Xcode 26 or later, iOS 26 / watchOS 26. In **Signing & Capabilities**, set your team on both targets. Xcode will register the iCloud container `iCloud.com.taj.forge`; change it in `project.yml` and `Shared/Persistence.swift` (`DataStore.cloudContainerID`) if you want a different ID. The AI coach needs a device with Apple Intelligence turned on. Without it, FORGE falls back to a built-in rule-based coach.
+Then in Xcode:
 
-## How it's put together
+1. Set your **Team** on the `FORGE`, `FORGEWatch` and `FORGETests` targets.
+2. If `com.taj.forge` isn't available to your team, change the bundle IDs in `project.yml`, and the iCloud container in both `project.yml` and `Shared/Persistence.swift` (`DataStore.cloudContainerID`). Then run `xcodegen` again.
+3. Run the `FORGE` scheme on a device. HealthKit workouts and the AI Coach don't fully work in the Simulator.
 
-| Folder | What's inside |
-|---|---|
-| `Shared/` | Used by both iPhone and Watch. SwiftData models (CloudKit-ready), exercise catalog, form guides, HealthKit `WorkoutTracker`, theme. |
-| `FORGE/Coach/` | `CoachEngine` protocol, `AppleIntelligenceCoach` (Foundation Models), `RuleBasedCoach` fallback, `CoachStore`. |
-| `FORGE/Views/` | Today, Plan, Exercise (form guide), Active workout, Summary, Coach chat, Notes, Week, Gyms. |
-| `FORGE/Intents/` | Siri / Shortcuts: "What's today's workout in FORGE", "Log a set in FORGE". |
-| `FORGEWatch/` | Watch app: today's plan, Digital Crown set logging, rest timer, live heart rate. |
+### Crews (beta)
 
-### The AI coach
-- `AppleIntelligenceCoach` uses `LanguageModelSession` with **guided generation** (`@Generable GeneratedDayPlan`). The model returns a typed plan, not free text.
-- **Tool calling:** the model calls `findExercises(muscle:)`. That tool only returns exercises that (a) the active gym's equipment supports and (b) no coach note rules out. This means the model can't suggest a leg press at your home gym, or a back squat after you said squats make you lightheaded.
-- **Chat → notes:** `GeneratedReply` decides whether a message is lasting feedback, turns it into a rule plus `MovementFlag`s to avoid, and triggers a replan.
-- `PlanFinisher` runs on every engine's output. It validates names against the catalog, tops up thin plans, trims volume when sleep or HRV are under your baseline, adds "replaces back squat" labels, and lengthens rest when a note calls for caution.
+Turn on **Settings → Crews (beta)**. Crews run on CloudKit, so the first crew you create in a Debug build adds the `Crew`, `Member`, `CheckIn` and `Nudge` record types to your container's development schema. Before shipping to TestFlight, deploy that schema to production in the [CloudKit Console](https://icloud.developer.apple.com/). Test invite links on real devices with different Apple Accounts.
 
-### Sync
-- SwiftData syncs through your **private iCloud database (CloudKit)** to iPhone, Watch and iPad. There's no server to run, and the data stays in your iCloud account.
-- Training days, split, goal and session length live in iCloud key-value storage (`SyncedSettings`).
-- Today's plan is stored as a `DailyPlan` record, so the Watch shows exactly what the iPhone coach built.
+> [!NOTE]
+> The Xcode project is generated, so `*.xcodeproj` is git-ignored. Change targets, entitlements and Info.plist keys in `project.yml`.
 
-### Apple Health + Fitness
-- Starting a workout runs an `HKWorkoutSession` with `HKLiveWorkoutBuilder` (Traditional Strength Training). This works on the Watch, and on iPhone with iOS 26.
-- Live heart rate and active calories are shown during the workout.
-- Every logged set is added to the workout as a segment event, with exercise, weight and reps in its metadata.
-- Finishing saves the workout to Health, so it shows up in Fitness. FORGE keeps the workout ID plus average/max heart rate, calories and a heart-rate timeline for its summary screen.
+### Regenerating the app icon
 
-### Coaching features
-- **Weight targets** (`Shared/Progression.swift`): double progression. Each move gets a target (e.g. "+10 lb, you hit 12 on every set"). It holds the weight and adds a rep inside the range, and backs off if you fell short of the range.
-- **Feedback loop:** per-set RPE and the "how did it feel" answer after a workout feed a session signal (`CoachContext.signal`). That signal eases or pushes load and volume, and is passed to the AI Coach prompt.
-- **Week ahead:** `CoachStore.planWeek` plans each upcoming training day, accounting for the days already planned before it. Chat can target a day ("make Saturday shorter").
-- **Mid-workout edits:** swap to an allowed alternative, add an exercise, skip, or fix/delete logged sets. Today's plan is updated, so the Watch sees the change too.
-- **History:** weekly volume, week streak, past workouts, and per-lift estimated 1-rep max charts.
-- **Custom exercises:** synced via iCloud and used by the coach like built-in ones.
-- **First-run setup + Settings:** goal, experience (sets per exercise), training days, session length, lb/kg (weights are stored in lb), gym, Health and notification permissions.
-- **Coach chat is saved** (`ChatEntry`) and syncs.
-- **Rest alert:** a local notification when rest ends with the app in the background.
-- **Tests:** `FORGETests/CoachLogicTests.swift` (Swift Testing), run with ⌘U.
+```sh
+python3 tools/make_icon.py FORGE/Assets.xcassets/AppIcon.appiconset FORGEWatch/Assets.xcassets/AppIcon.appiconset
+```
 
-## Not built yet (best done in Claude Code on the Mac)
-- **Compile + first run:** nothing has been built yet; expect a round of compiler fixes.
-- **Workout mirroring** between Watch and iPhone (`startMirroringToCompanionDevice`). For now, start the workout on one device; starting on both records two workouts in Health.
-- **Live Activity / Dynamic Island** rest timer, a home-screen widget, and a Watch complication. These need extension targets.
-- **"Scan this gym" from photos** (iOS 27 multimodal Foundation Models) and form demo videos.
+## Testing
+
+```sh
+xcodebuild test -scheme FORGE -destination 'platform=iOS Simulator,name=iPhone 17'
+```
+
+The tests in `FORGETests/CoachLogicTests.swift` cover progressive overload, rep-range parsing, units, day matching, readiness, plan finishing (equipment, notes, experience, feedback) and crew streaks.
+
+## Privacy
+
+- **The AI runs on device.** Prompts, plans and chat go to Apple's on-device model, not a server.
+- **Your data stays in your iCloud.** Workouts, notes and chat sync through your private CloudKit database. FORGE has no backend.
+- **Health data stays local.** Sleep and HRV are read on the iPhone to shape the plan and are never uploaded or shared.
+- **Crews share check-ins only:** workout type, sets, minutes, and whether Health recorded it. Weights, heart rate, sleep and coach notes are never shared.
+
+## Project layout
+
+```
+FORGE/            iPhone app
+  App/            entry point, app + scene delegates
+  Coach/          CoachEngine, AppleIntelligenceCoach, RuleBasedCoach, CoachStore
+  Crew/           CloudKit sharing, streak math, Crew UI (beta)
+  Health/         sleep + HRV snapshot
+  Intents/        Siri / Shortcuts
+  Views/          Today, Plan, Active workout, Summary, History, Week, Gyms, Settings…
+  Workout/        rest notifications
+FORGEWatch/       Apple Watch app
+Shared/           code built into both apps: models, catalog, form guides,
+                  progression, HealthKit workout tracker, theme
+FORGETests/       Swift Testing suite
+docs/             icon + screenshots
+tools/            icon generator
+project.yml       XcodeGen spec
+```
+
+## Roadmap
+
+- [x] AI Coach with equipment- and notes-aware planning
+- [x] Progressive overload, RPE and how-it-felt feedback
+- [x] HealthKit workouts, Apple Watch logging, iCloud sync
+- [x] History, custom exercises, onboarding, lb/kg
+- [x] Crews (beta): weekly streaks and nudges over CloudKit
+- [ ] First device build and compile fixes
+- [ ] Watch ↔ iPhone workout mirroring (one shared live workout)
+- [ ] Live Activity / Dynamic Island rest timer, widgets, Watch complication
+- [ ] "Scan this gym" from photos (multimodal Foundation Models, iOS 27)
+- [ ] Form demo videos
+- [ ] Crew challenges and per-crew leaderboards
+
+## Known limitations
+
+- The project has not been compiled yet, so expect a round of compiler fixes on the first build.
+- Starting a workout on both the Watch and the iPhone records two workouts in Health until mirroring lands.
 - Two devices logging at the same moment, before iCloud syncs, can create two sessions for that day.
+- Anyone with a crew's invite link can join, which is fine for the beta.

@@ -19,6 +19,7 @@ struct TodayView: View {
                 } else {
                     Card { ProgressView("Your coach is planning today…").tint(Theme.ember) }
                 }
+                if SyncedSettings.crewBeta { CrewCard() }
                 readiness
                 if let plan = coach.plan, !plan.isRestDay {
                     NavigationLink { PlanView() } label: { Text("Start workout") }

@@ -180,6 +180,7 @@ struct SettingsView: View {
     @State private var experience = SyncedSettings.experience
     @State private var unit = SyncedSettings.unit
     @State private var minutes = SyncedSettings.minutes
+    @State private var crewBeta = SyncedSettings.crewBeta
     @State private var changed = false
 
     var body: some View {
@@ -192,6 +193,12 @@ struct SettingsView: View {
             Section("Units") {
                 Picker("Weights in", selection: $unit) { ForEach(WeightUnit.allCases) { Text($0.label).tag($0) } }
                     .pickerStyle(.segmented)
+            }
+            Section {
+                Toggle("Crews (beta)", isOn: $crewBeta)
+                if crewBeta { NavigationLink("Your crew") { CrewView() } }
+            } footer: {
+                Text("Weekly streaks with friends, shared through iCloud. Crews only see check-ins: workout type, sets and minutes.")
             }
             Section {
                 NavigationLink("Exercise library") { ExerciseLibraryView() }
@@ -210,6 +217,7 @@ struct SettingsView: View {
         .onChange(of: experience) { SyncedSettings.experience = experience; changed = true }
         .onChange(of: unit) { SyncedSettings.unit = unit; changed = true }
         .onChange(of: minutes) { SyncedSettings.minutes = minutes; changed = true }
+        .onChange(of: crewBeta) { SyncedSettings.crewBeta = crewBeta }
         .onDisappear { if changed { changed = false; Task { await coach.invalidate(ctx) } } }
     }
 }

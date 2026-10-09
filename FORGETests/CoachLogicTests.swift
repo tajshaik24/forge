@@ -166,3 +166,59 @@ struct PlanFinisherTests {
         #expect(plan.reasons.contains { $0.contains("too hard") })
     }
 }
+
+@Suite("Crew streaks")
+struct CrewStreakTests {
+    private let cal = CrewStreaks.calendar
+    /// Wednesday noon of the current week, so tests don't depend on what day they run.
+    private var wednesday: Date {
+        cal.date(byAdding: .hour, value: 2 * 24 + 12, to: CrewStreaks.weekStart(.now))!
+    }
+
+    private func checkIns(_ user: String, weeksAgo: Int, days: [Int]) -> [CrewCheckIn] {
+        let monday = cal.date(byAdding: .weekOfYear, value: -weeksAgo, to: CrewStreaks.weekStart(wednesday))!
+        return days.map { d in
+            let date = cal.date(byAdding: .hour, value: d * 24 + 18, to: monday)!
+            return CrewCheckIn(id: "\(user)-\(weeksAgo)-\(d)", userID: user, name: user, date: date,
+                               focus: "Push", sets: 15, minutes: 45, verified: true)
+        }
+    }
+
+    @Test func restDaysDontBreakWeeklyStreak() {
+        // 3 days/week for the last three weeks, this week not done yet.
+        let history = (1...3).flatMap { checkIns("a", weeksAgo: $0, days: [0, 2, 4]) }
+        #expect(CrewStreaks.streak(history, goal: 3, now: wednesday) == 3)
+    }
+
+    @Test func missedWeekResetsStreak() {
+        let history = checkIns("a", weeksAgo: 1, days: [0, 2, 4]) + checkIns("a", weeksAgo: 3, days: [0, 2, 4])
+        #expect(CrewStreaks.streak(history, goal: 3, now: wednesday) == 1)
+    }
+
+    @Test func currentWeekCountsOnceMet() {
+        let history = checkIns("a", weeksAgo: 0, days: [0, 1, 2]) + checkIns("a", weeksAgo: 1, days: [0, 2, 4])
+        #expect(CrewStreaks.streak(history, goal: 3, now: wednesday) == 2)
+    }
+
+    @Test func twoWorkoutsSameDayCountOnce() {
+        let history = checkIns("a", weeksAgo: 1, days: [0, 0, 2])
+        #expect(CrewStreaks.streak(history, goal: 3, now: wednesday) == 0)
+    }
+
+    @Test func atRiskWhenRunningOutOfDays() {
+        // Wednesday, nothing done this week, goal 4: needs 4 in 5 remaining days -> at risk.
+        let member = CrewMember(id: "a", name: "A", weeklyGoal: 4)
+        let s = CrewStreaks.standing(for: member, checkIns: [], now: wednesday)
+        #expect(s.atRisk)
+        #expect(s.needed == 4)
+        let easy = CrewStreaks.standing(for: CrewMember(id: "a", name: "A", weeklyGoal: 2), checkIns: [], now: wednesday)
+        #expect(!easy.atRisk)
+    }
+
+    @Test func crewStreakNeedsEveryone() {
+        let members = [CrewMember(id: "a", name: "A", weeklyGoal: 2), CrewMember(id: "b", name: "B", weeklyGoal: 2)]
+        let a = (1...2).flatMap { checkIns("a", weeksAgo: $0, days: [0, 3]) }
+        let b = checkIns("b", weeksAgo: 1, days: [1, 4]) + checkIns("b", weeksAgo: 2, days: [1])
+        #expect(CrewStreaks.crewStreak(members: members, checkIns: a + b, now: wednesday) == 1)
+    }
+}

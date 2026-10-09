@@ -195,6 +195,12 @@ enum SyncedSettings {
         set { kv.set(newValue.rawValue, forKey: "experience"); kv.synchronize() }
     }
 
+    /// Crews (beta): shared weekly streaks with friends over CloudKit.
+    static var crewBeta: Bool {
+        get { kv.bool(forKey: "crewBeta") }
+        set { kv.set(newValue, forKey: "crewBeta"); kv.synchronize() }
+    }
+
     /// Set at the end of first-run setup. Also read locally so a new device with no
     /// iCloud yet doesn't flash the setup again after it's been done there.
     static var onboarded: Bool {
