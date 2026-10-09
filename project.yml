@@ -1,0 +1,98 @@
+# Generate the Xcode project with:  brew install xcodegen && xcodegen
+name: FORGE
+options:
+  bundleIdPrefix: com.taj
+  deploymentTarget:
+    iOS: "26.0"
+    watchOS: "26.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""   # set your team ID here (or in Xcode > Signing & Capabilities)
+targets:
+  FORGE:
+    type: application
+    platform: iOS
+    sources:
+      - path: FORGE
+      - path: Shared
+    dependencies:
+      - target: FORGEWatch
+    info:
+      path: FORGE/Info.plist
+      properties:
+        CFBundleDisplayName: FORGE
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIUserInterfaceStyle: Dark
+        UIBackgroundModes: [remote-notification, workout-processing]
+        NSHealthShareUsageDescription: "FORGE reads your heart rate, sleep and heart-rate variability to track workouts and adjust today's training volume."
+        NSHealthUpdateUsageDescription: "FORGE saves your strength workouts, heart rate and active calories to Apple Health so they appear in Fitness."
+    entitlements:
+      path: FORGE/FORGE.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access: []
+        com.apple.developer.icloud-container-identifiers: [iCloud.com.taj.forge]
+        com.apple.developer.icloud-services: [CloudKit]
+        com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)com.taj.forge
+        aps-environment: development
+        com.apple.developer.usernotifications.time-sensitive: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.taj.forge
+        TARGETED_DEVICE_FAMILY: "1"
+
+  FORGETests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: FORGETests
+    dependencies:
+      - target: FORGE
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.taj.forge.tests
+        GENERATE_INFOPLIST_FILE: YES
+
+  FORGEWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - path: FORGEWatch
+      - path: Shared
+    info:
+      path: FORGEWatch/Info.plist
+      properties:
+        CFBundleDisplayName: FORGE
+        WKApplication: true
+        WKCompanionAppBundleIdentifier: com.taj.forge
+        WKBackgroundModes: [workout-processing]
+        NSHealthShareUsageDescription: "FORGE reads your heart rate during workouts."
+        NSHealthUpdateUsageDescription: "FORGE saves your strength workouts to Apple Health so they appear in Fitness."
+    entitlements:
+      path: FORGEWatch/FORGEWatch.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access: []
+        com.apple.developer.icloud-container-identifiers: [iCloud.com.taj.forge]
+        com.apple.developer.icloud-services: [CloudKit]
+        com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)com.taj.forge
+        aps-environment: development
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.taj.forge.watchkitapp
+
+schemes:
+  FORGE:
+    build:
+      targets:
+        FORGE: all
+    test:
+      targets:
+        - FORGETests
+    run:
+      config: Debug
