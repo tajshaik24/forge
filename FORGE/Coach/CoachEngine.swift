@@ -281,7 +281,7 @@ enum PlanFinisher {
         }
         let testing = picked.filter { $0.calibrate == true }.count
         if testing > 0, testing * 2 >= picked.count {
-            why.insert("New lifts: test sets find your starting weights.", at: 0)
+            why.insert("New lifts: First Heat sets find your starting weights.", at: 0)
         }
 
         let cautious = context.avoid.contains(.standingHeavy) || context.avoid.contains(.axialLoading)

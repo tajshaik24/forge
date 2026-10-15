@@ -2,7 +2,7 @@ import Testing
 import Foundation
 @testable import FORGE
 
-@Suite("Find your starting weight")
+@Suite("First Heat")
 struct StrengthTests {
     private let bench = ExerciseCatalog.named("Barbell bench press")!
     private let curl = ExerciseCatalog.named("Dumbbell curl")!
@@ -68,6 +68,6 @@ struct StrengthTests {
         #expect(bench?.calibrate == true)
         #expect(bench?.reps == "6-10")
         #expect(plan.exercises.first { $0.name == "Push-up" }?.calibrate == nil)
-        #expect(plan.reasons.first?.contains("test sets") == true)
+        #expect(plan.reasons.first?.contains("First Heat") == true)
     }
 }

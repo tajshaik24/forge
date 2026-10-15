@@ -626,7 +626,7 @@ struct CalibrationCard: View {
     var body: some View {
         Card {
             if let result {
-                SectionLabel("Found your weight")
+                SectionLabel("First Heat · done")
                 Text("\(unit.format(pounds: result.tested.weight)) × \(result.tested.reps) felt like an RPE \(result.tested.rpe ?? 8), so your estimated max is about \(unit.format(pounds: result.estimatedMax)).")
                     .font(.system(size: 14)).fixedSize(horizontal: false, vertical: true)
                 Label("Working sets: \(unit.format(pounds: result.working.weight)) × \(exercise.reps) reps",
@@ -634,7 +634,7 @@ struct CalibrationCard: View {
                     .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.emberSoft)
                 Text(RepScheme.summary(for: goal)).font(.system(size: 12)).foregroundStyle(Theme.muted)
             } else {
-                SectionLabel("Find your starting weight · set \(tests.count + 1)")
+                SectionLabel("First Heat · set \(tests.count + 1)")
                 Text(tests.isEmpty
                      ? "First time on this lift. Do \(testReps) reps with a weight you're sure about, then rate how hard it was. We'll suggest the next weight until a set feels like an 8: two reps left in the tank."
                      : "Do \(testReps) reps at the suggested weight. Rate it honestly. An 8 means you could have done two more.")

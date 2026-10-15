@@ -240,7 +240,7 @@ What's next, and why, is in [docs/gameplan.md](docs/gameplan.md).
 - [ ] Verify mirroring, streaming and the Live Activity on iPhone + Watch
 - [x] Exercise library v2: 138 exercises with patterns, levels, photos, warm-ups, stretches and posture work
 - [x] Warm-up, ramp-up sets and cool-down in every workout
-- [x] "Find your starting weight" test sets and goal-based rep ranges, rest and working weights
+- [x] "First Heat" initial benchmarking (test sets) and goal-based rep ranges, rest and working weights
 - [ ] Program builder the AI fills in: weekly volume, 4-week blocks with a deload, pinned days
 - [ ] Guided intake: body check, pull-up/push-up checks, priorities, tight spots
 - [ ] Widgets and Watch complication (after the App Group check)
