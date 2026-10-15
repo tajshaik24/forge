@@ -101,7 +101,9 @@ struct ExerciseRow: View {
             Text(String(format: "%02d", index)).font(Theme.mono(13)).foregroundStyle(Theme.muted)
             VStack(alignment: .leading, spacing: 3) {
                 Text(exercise.name).font(.system(size: 16, weight: .bold))
-                if let replaced = exercise.replaces {
+                if exercise.calibrate == true {
+                    Text("Find your weight: test sets first").font(.system(size: 12)).foregroundStyle(Theme.emberSoft)
+                } else if let replaced = exercise.replaces {
                     Text("Replaces \(replaced.lowercased())").font(.system(size: 12)).foregroundStyle(Theme.emberSoft)
                 } else if let note = exercise.target?.note {
                     Text(note).font(.system(size: 12)).foregroundStyle(Theme.emberSoft).lineLimit(1)

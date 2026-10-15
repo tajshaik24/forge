@@ -236,6 +236,8 @@ struct PlannedExercise: Codable, Sendable, Hashable, Identifiable {
     var replaces: String?
     /// Weight + reps to aim for, from progressive overload. Nil the first time you do a move.
     var target: LoadTarget?
+    /// First time on a weighted lift: start with test sets to find your weight.
+    var calibrate: Bool? = nil
 }
 
 struct PlannedWorkout: Codable, Sendable, Hashable {

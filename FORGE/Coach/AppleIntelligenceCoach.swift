@@ -238,7 +238,7 @@ enum CoachPrompts {   // not "PromptBuilder": that name is a FoundationModels re
     static func plan(_ c: CoachContext) -> String {
         var lines: [String] = []
         let day = c.isToday ? "today" : c.date.formatted(.dateTime.weekday(.wide))
-        lines.append("Planning for \(day). Goal: \(c.goal). Experience: \(c.experience.label). Session length: \(c.minutes) min. Split: \(c.split.label). Gym: \(c.gymName).")
+        lines.append("Planning for \(day). Goal: \(c.goal) (\(RepScheme.summary(for: c.trainingGoal))). Experience: \(c.experience.label). Session length: \(c.minutes) min. Split: \(c.split.label). Gym: \(c.gymName).")
         lines.append("Use \(c.experience.setRange.lowerBound)-\(c.experience.setRange.upperBound) working sets per exercise.")
         lines.append("Candidate focuses (muscle readiness, 100 = fully recovered):")
         for t in c.rankedTemplates.prefix(4) {

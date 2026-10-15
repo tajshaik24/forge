@@ -51,7 +51,26 @@ struct ActiveWorkoutView: View {
         exercises.indices.contains(exerciseIndex) ? exercises[exerciseIndex] : nil
     }
     private func logged(_ name: String) -> [SetEntry] { todaysSets.filter { $0.exercise == name } }
-    private var setNumber: Int { (current.map { logged($0.name).count } ?? 0) + 1 }
+    private var setNumber: Int { (current.map { working(logged($0.name), $0) } ?? 0) + 1 }
+    private let goal = TrainingGoal(rawValue: SyncedSettings.goal) ?? .buildMuscle
+
+    /// Working sets done. On a "find your weight" lift the test sets don't count: the set that
+    /// reached RPE 8 is the first working set, and the rest follow at the weight it implies.
+    private func working(_ sets: [SetEntry], _ ex: PlannedExercise) -> Int {
+        guard ex.calibrate == true else { return sets.count }
+        guard let found = sets.firstIndex(where: { ($0.rpe ?? 0) >= Calibration.foundAtRPE && $0.weight > 0 }) else { return 0 }
+        return sets.count - found
+    }
+
+    private func records(_ sets: [SetEntry]) -> [SetRecord] {
+        sets.map { SetRecord(date: $0.date, weight: $0.weight, reps: $0.reps, rpe: $0.rpe) }
+    }
+
+    /// Where the weight test landed, once a set has felt hard enough.
+    private func calibration(_ ex: PlannedExercise, _ sets: [SetEntry]) -> Calibration.Result? {
+        guard ex.calibrate == true, let catalog = ExerciseCatalog.named(ex.name) else { return nil }
+        return Calibration.result(for: catalog, sets: records(sets), goal: goal, unit: unit)
+    }
 
     /// Exercises this gym and your notes allow.
     private var pool: [Exercise] {
@@ -161,7 +180,10 @@ struct ActiveWorkoutView: View {
                     .accessibilityLabel("Exercise options")
                 }
 
-                if let target = ex.target {
+                if ex.calibrate == true {
+                    CalibrationCard(exercise: ex, tests: logged(ex.name), result: calibration(ex, logged(ex.name)),
+                                    goal: goal, unit: unit)
+                } else if let target = ex.target {
                     Label(target.weight > 0
                           ? "Target \(unit.format(pounds: target.weight)) × \(target.reps)\(timed ? " s" : "") · \(target.note)"
                           : "Target \(target.reps) \(timed ? "s" : "reps") · \(target.note)",
@@ -196,7 +218,7 @@ struct ActiveWorkoutView: View {
                     Picker("RPE", selection: $rpe) { ForEach(6...10, id: \.self) { Text("\($0)") } }
                         .pickerStyle(.segmented)
                     Text("10 = nothing left · 8 = two reps left").font(.system(size: 11)).foregroundStyle(Theme.muted)
-                    Button("Log set \(setNumber)") { logSet(ex, plan) }.buttonStyle(EmberButtonStyle())
+                    Button(ex.calibrate == true && calibration(ex, logged(ex.name)) == nil ? "Log test set" : "Log set \(setNumber)") { logSet(ex, plan) }.buttonStyle(EmberButtonStyle())
                 }
 
                 loggedList(ex)
@@ -235,7 +257,7 @@ struct ActiveWorkoutView: View {
     }
 
     private func setStrip(_ ex: PlannedExercise) -> some View {
-        let done = logged(ex.name).count
+        let done = working(logged(ex.name), ex)
         return HStack(spacing: 6) {
             ForEach(1...max(ex.sets, done + 1), id: \.self) { n in
                 Text(n <= done ? "DONE" : (n == done + 1 ? "NOW" : "SET \(n)"))
@@ -294,8 +316,10 @@ struct ActiveWorkoutView: View {
     private func logSet(_ ex: PlannedExercise, _ plan: PlannedWorkout) {
         let entry = SetLogger.log(exercise: ex.name, weight: unit.toPounds(weight), reps: reps, rpe: rpe,
                                   focus: plan.focus, gymName: plan.gymName, setStarted: setStarted, in: ctx)
-        // @Query may or may not have refreshed yet: count earlier sets without the new one, then add it.
-        advance(after: ex, doneCount: logged(ex.name).filter { $0 !== entry }.count + 1, plan)
+        // @Query may or may not have refreshed yet: take earlier sets without the new one, then add it.
+        let sets = logged(ex.name).filter { $0 !== entry } + [entry]
+        advance(after: ex, doneCount: working(sets, ex), plan)
+        if ex.calibrate == true { prefillCalibration(ex, sets) }
     }
 
     /// A set logged on the Watch (already saved by the tracker): move on as if it was logged here.
@@ -303,8 +327,9 @@ struct ActiveWorkoutView: View {
         guard let plan, let ex = exercises.first(where: { $0.name == set.exercise }) else { return }
         let name = set.exercise
         let start = Calendar.current.startOfDay(for: .now)
-        let count = (try? ctx.fetchCount(FetchDescriptor<SetEntry>(
-            predicate: #Predicate { $0.exercise == name && $0.date >= start }))) ?? 0
+        let sets = (try? ctx.fetch(FetchDescriptor<SetEntry>(
+            predicate: #Predicate { $0.exercise == name && $0.date >= start }, sortBy: [SortDescriptor(\.date)]))) ?? []
+        let count = working(sets, ex)
         if let i = exercises.firstIndex(of: ex), i != exerciseIndex { exerciseIndex = i; prefill() }
         // The Watch finishes on its own after its last set; its result files the workout here.
         advance(after: ex, doneCount: count, plan, finishWhenDone: false)
@@ -335,6 +360,25 @@ struct ActiveWorkoutView: View {
     private var ramp: [RampUp.Step] {
         guard let first = exercises.first, let ex = ExerciseCatalog.named(first.name) else { return [] }
         return RampUp.steps(for: ex, target: first.target, unit: unit)
+    }
+
+    /// Test sets: the suggested next weight at the test reps. Once found: the working weight.
+    private func prefillCalibration(_ ex: PlannedExercise, _ sets: [SetEntry]) {
+        guard let catalog = ExerciseCatalog.named(ex.name) else { return }
+        if let result = calibration(ex, sets) {
+            weight = unit.roundToStep(unit.fromPounds(result.working.weight))
+            reps = result.working.reps
+            rpe = 8
+        } else if let last = sets.last, let next = Calibration.nextWeight(after: last.weight, rpe: last.rpe ?? 7, unit: unit) {
+            weight = unit.roundToStep(unit.fromPounds(next))
+            reps = Calibration.testReps(for: catalog)
+            rpe = 7
+        } else if sets.isEmpty {
+            // An empty bar is a safe first test; otherwise you pick something light.
+            weight = catalog.equipment.contains(.barbell) ? (unit == .lb ? 45 : 20) : 0
+            reps = Calibration.testReps(for: catalog)
+            rpe = 7
+        }
     }
 
     private func extendRest() {
@@ -388,6 +432,10 @@ struct ActiveWorkoutView: View {
     /// Start from the coach's target, else what you lifted last time.
     private func prefill() {
         guard let current else { return }
+        if current.calibrate == true {
+            prefillCalibration(current, logged(current.name))
+            return
+        }
         if let t = current.target {
             weight = unit.roundToStep(unit.fromPounds(t.weight))
             reps = t.reps
@@ -560,5 +608,42 @@ struct EditSetSheet: View {
             .onAppear { weight = unit.roundToStep(unit.fromPounds(entry.weight)) }
         }
         .presentationDetents([.medium])
+    }
+}
+
+// MARK: - Find your weight
+
+/// The test-set guide on a lift you haven't done before, then what the test found.
+struct CalibrationCard: View {
+    let exercise: PlannedExercise
+    let tests: [SetEntry]
+    let result: Calibration.Result?
+    let goal: TrainingGoal
+    let unit: WeightUnit
+
+    private var testReps: Int { ExerciseCatalog.named(exercise.name).map(Calibration.testReps) ?? 5 }
+
+    var body: some View {
+        Card {
+            if let result {
+                SectionLabel("Found your weight")
+                Text("\(unit.format(pounds: result.tested.weight)) × \(result.tested.reps) felt like an RPE \(result.tested.rpe ?? 8), so your estimated max is about \(unit.format(pounds: result.estimatedMax)).")
+                    .font(.system(size: 14)).fixedSize(horizontal: false, vertical: true)
+                Label("Working sets: \(unit.format(pounds: result.working.weight)) × \(exercise.reps) reps",
+                      systemImage: "scope")
+                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.emberSoft)
+                Text(RepScheme.summary(for: goal)).font(.system(size: 12)).foregroundStyle(Theme.muted)
+            } else {
+                SectionLabel("Find your weight · test set \(tests.count + 1)")
+                Text(tests.isEmpty
+                     ? "First time on this lift. Do \(testReps) reps with a weight you're sure about, then rate how hard it was. We'll suggest the next weight until a set feels like an 8: two reps left in the tank."
+                     : "Do \(testReps) reps at the suggested weight. Rate it honestly. An 8 means you could have done two more.")
+                    .font(.system(size: 14)).fixedSize(horizontal: false, vertical: true)
+                if !tests.isEmpty {
+                    Text(tests.map { "\(unit.format(pounds: $0.weight)) × \($0.reps) @ \($0.rpe ?? 0)" }.joined(separator: "  ·  "))
+                        .font(Theme.mono(12)).foregroundStyle(Theme.muted)
+                }
+            }
+        }
     }
 }

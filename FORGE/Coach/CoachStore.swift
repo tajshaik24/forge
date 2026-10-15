@@ -271,7 +271,7 @@ final class CoachStore {
         guard let ex = ExerciseCatalog.named(name) else { return nil }
         let context = makeContext(ctx)
         return Progression.target(for: ex, history: DataStore.history(of: ex.name, in: ctx),
-                                  signal: context.signal, unit: context.unit)
+                                  signal: context.signal, unit: context.unit, goal: context.trainingGoal)
     }
 
     // MARK: Chat (saved in SwiftData as ChatEntry, so it syncs and survives relaunch)

@@ -120,6 +120,27 @@ Phase 1 comes first because everything else selects by `pattern` and `kind`. Pha
 3. **Intake:** runs once on existing installs that haven't done it, keeping history and notes.
 4. **Deloads:** automatically every 4th week.
 
+## Added: find your weight (2026-10-14)
+
+Asked for after phases 1–2: a baseline period that finds the right weights, then tunes them to the goal.
+
+- **Test sets:** the first time you do a weighted lift, the plan marks it "find your weight". You do 5 reps (big lifts) or 10 (smaller ones) and rate each set. The app suggests +20 % after an RPE ≤ 6 and +10 % after a 7, and stops at the first set rated 8 or more. A barbell lift starts with the empty bar. Test sets don't count toward the planned sets: the set that reaches RPE 8 is the first working set.
+- **Estimated max:** Epley, counting reps left in the tank (135 × 5 at RPE 8 counts as 7 reps to failure, so about 166 lb).
+- **Goal → reps, rest, weight** (`Shared/Strength.swift`):
+
+  | Goal | Big lifts | Smaller lifts | Rest |
+  |---|---|---|---|
+  | Get stronger | 3–6 | 6–10 | 150 s |
+  | Build muscle | 6–10 | 10–15 | 90 s |
+  | Lose fat, keep muscle | 5–8 | 10–15 | 60 s |
+  | General fitness | 8–12 | 12–15 | 75 s |
+
+  The working weight is the weight for the bottom of the range with two reps left, from the estimated max. Bodyweight and timed moves keep their own dose.
+- **After the test, or a goal change:** if the last session's reps are outside the goal's range, the next target comes from the estimated max instead of "you missed, go lighter". Inside the range, double progression carries on as before.
+- **Week 1 is the baseline week:** almost every lift is new, so the plan says "New lifts: test sets find your starting weights". Later new lifts test on their own.
+- The form page shows **Your numbers**: estimated max and the weight range for your goal.
+- **Limit:** test-set guidance is on the iPhone. A test set logged on the Watch has no RPE, so the phone keeps treating that lift as still testing.
+
 ## As built (phases 1–2)
 
 - **Catalog stays in Swift** (`Shared/ExerciseCatalog.swift`) rather than JSON. It's compile-checked, and tests cover it. Each exercise has a `kind`, `pattern`, `level`, `areas`, `helpsPosture` and an optional `photo`.

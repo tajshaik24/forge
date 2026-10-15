@@ -63,6 +63,8 @@ struct CoachContext: Sendable {
 
     var isToday: Bool { Calendar.current.isDateInToday(date) }
 
+    var trainingGoal: TrainingGoal { TrainingGoal(rawValue: goal) ?? .buildMuscle }
+
     /// Session-level feedback that nudges load and volume.
     var signal: Progression.Signal {
         if (isToday && health.isUnderRecovered) || recentFeel.first == "hard" || (recentAvgRPE ?? 0) >= 9.3 {
@@ -267,17 +269,25 @@ enum PlanFinisher {
         }
         if let summary = context.feedbackSummary { why.insert(summary, at: min(1, why.count)) }
 
-        // Progressive overload: weight + reps to aim for on every exercise you've done before.
+        // The goal sets the rep range; progressive overload sets weight + reps on every lift you've
+        // done before. A weighted lift you haven't done gets "find your weight" test sets.
+        let goal = context.trainingGoal
         for i in picked.indices {
             guard let ex = ExerciseCatalog.named(picked[i].name) else { continue }
+            picked[i].reps = RepScheme.reps(for: ex, goal: goal)
             picked[i].target = Progression.target(for: ex, history: context.history[ex.name] ?? [],
-                                                  signal: context.signal, unit: context.unit)
+                                                  signal: context.signal, unit: context.unit, goal: goal)
+            picked[i].calibrate = picked[i].target == nil && Calibration.applies(to: ex) ? true : nil
+        }
+        let testing = picked.filter { $0.calibrate == true }.count
+        if testing > 0, testing * 2 >= picked.count {
+            why.insert("New lifts: test sets find your starting weights.", at: 0)
         }
 
         let cautious = context.avoid.contains(.standingHeavy) || context.avoid.contains(.axialLoading)
         return PlannedWorkout(date: context.date, focus: focus, muscles: muscles, minutes: context.minutes,
                               reasons: Array(why.prefix(3)), exercises: picked,
-                              restSeconds: cautious ? 150 : 90, gymName: context.gymName, engine: engine,
+                              restSeconds: cautious ? max(150, RepScheme.rest(for: goal)) : RepScheme.rest(for: goal), gymName: context.gymName, engine: engine,
                               warmUp: WarmUps.warmUp(for: picked, context: context),
                               coolDown: WarmUps.coolDown(for: muscles, context: context))
     }

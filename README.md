@@ -48,7 +48,8 @@ sets a weight target for every lift, and saves every workout to Apple Health.
 | **Learns your limits** | Tell it *"squats make me lightheaded"* and it saves a note, rules out bar-on-spine and heavy standing lifts, swaps in supported movements, lengthens rest and adds a "stand up slowly" cue. A note about one lift stays about that lift: *"I can't do a pull-up yet"* swaps in band-assisted and negative pull-ups and leaves the rest of your back day alone. |
 | **Chat that feels alive** | Coach replies stream in word by word, with rotating status lines (*"running up the steps…"*, *"crunching the abs…"*) while it thinks or rebuilds a plan. |
 | **Equipment-aware** | Gym profiles (home, commercial, travel). The coach only programs what that gym has, so a leg press becomes bench step-ups at home. |
-| **Progressive overload** | Double progression gives each lift a weight + rep target. Your RPE and the "how did it feel" check-in after each workout nudge load and volume up or down. |
+| **Finds your weights** | The first time you do a weighted lift, test sets climb until one feels like an RPE 8 (e.g. 135 lb × 5). That gives an estimated max, and your goal turns it into working weights: heavy triples to get stronger, 6–10 reps to build muscle, heavy-but-short-rest to lose fat. |
+| **Progressive overload** | Double progression gives each lift a weight + rep target inside your goal's rep range. Your RPE and the "how did it feel" check-in after each workout nudge load and volume up or down. Change your goal and the weights are reworked from your estimated max. |
 | **Plans the week** | Every upcoming training day gets a plan that accounts for the days before it. Ask the coach to *"make Saturday shorter"* and only Saturday is rebuilt. Tap any date in the week strip to see that day's plan in Today, then move it to another day, make it a rest day, or add a training day. |
 | **Exercise library** | 138 curated exercises: the major lifts plus warm-ups, mobility drills, stretches and posture work. Each has a movement pattern, a level, and start/finish photos where available. |
 | **Form guides** | One page per exercise, written for beginners: start/finish photos, what it works, what you need, how many, one key cue to remember, then numbered steps and what to avoid. |
@@ -178,7 +179,7 @@ python3 tools/import_exercise_photos.py   # fetches start/finish photos for ever
 xcodebuild test -scheme FORGE -destination 'platform=iOS Simulator,name=iPhone 17'
 ```
 
-61 tests in 10 suites (Swift Testing):
+68 tests in 11 suites (Swift Testing):
 
 | File | Covers |
 |---|---|
@@ -186,6 +187,7 @@ xcodebuild test -scheme FORGE -destination 'platform=iOS Simulator,name=iPhone 1
 | `CoachNoteTests.swift` | notes stay specific: flag checks, exercise matching, easier versions, copied cues, every exercise has a form guide |
 | `MoveDayTests.swift` | moving and swapping days, rest days, adding a training day |
 | `MirrorTests.swift` | Watch ↔ iPhone message coding |
+| `StrengthTests.swift` | estimated max, goal rep ranges, test-set climbing, working weights after a test or a goal change |
 | `LibraryTests.swift` | library integrity (guides, cues, patterns, bundled photos), planner levels, warm-up and cool-down picks, ramp-up sets, old plans still decode |
 
 Mirroring, the Live Activity and Health writes need real hardware. See the checklists in [docs/scope-device-watch-live.md](docs/scope-device-watch-live.md).
@@ -238,6 +240,7 @@ What's next, and why, is in [docs/gameplan.md](docs/gameplan.md).
 - [ ] Verify mirroring, streaming and the Live Activity on iPhone + Watch
 - [x] Exercise library v2: 138 exercises with patterns, levels, photos, warm-ups, stretches and posture work
 - [x] Warm-up, ramp-up sets and cool-down in every workout
+- [x] "Find your weight" test sets and goal-based rep ranges, rest and working weights
 - [ ] Program builder the AI fills in: weekly volume, 4-week blocks with a deload, pinned days
 - [ ] Guided intake: body check, pull-up/push-up checks, priorities, tight spots
 - [ ] Widgets and Watch complication (after the App Group check)

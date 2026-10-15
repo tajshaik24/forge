@@ -54,9 +54,10 @@ enum Progression {
     /// - Parameters:
     ///   - history: this exercise's sets, any order.
     ///   - signal: session-level feedback (felt too hard / under-recovered -> holdBack; felt easy -> pushOn).
+    ///   - goal: sets the rep range (and, through your estimated max, the weight). Nil = the catalog's range.
     static func target(for exercise: Exercise, history: [SetRecord], signal: Signal = .normal,
-                       unit: WeightUnit = .lb) -> LoadTarget? {
-        let range = exercise.repRange
+                       unit: WeightUnit = .lb, goal: TrainingGoal? = nil) -> LoadTarget? {
+        let range = goal.map { RepScheme.range(for: exercise, goal: $0) } ?? exercise.repRange
         guard let last = lastSession(history) else { return nil }
         let isBodyweight = exercise.equipment.isEmpty || last.allSatisfy { $0.weight == 0 }
 
@@ -76,6 +77,16 @@ enum Progression {
                 return LoadTarget(weight: 0, reps: minReps + more, note: "Beat last time: \(minReps + more) \(word)")
             }
             return LoadTarget(weight: 0, reps: max(minReps, range.lowerBound), note: "Match \(max(minReps, range.lowerBound)) \(word)")
+        }
+
+        // Last time was a different rep range (a "find your weight" test, or the goal changed):
+        // work out the weight for this range from your estimated max instead of starting over.
+        if goal != nil, minReps < range.lowerBound || minReps > range.upperBound + 2,
+           let max = Strength.estimatedMax(from: history) {
+            var weight = Strength.weight(forReps: range.lowerBound, max: max, unit: unit)
+            if signal == .holdBack { weight = roundDown(weight * 0.95, unit: unit) }
+            return LoadTarget(weight: weight, reps: range.lowerBound,
+                              note: "Est. max \(unit.format(pounds: max)) → \(range.lowerBound)–\(range.upperBound) reps")
         }
 
         let jump = increment(for: exercise, unit: unit)

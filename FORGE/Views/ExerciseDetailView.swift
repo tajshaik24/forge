@@ -44,6 +44,7 @@ struct ExerciseDetailView: View {
                         if let last = history.first { stat("Last", "\(SyncedSettings.unit.format(pounds: last.weight)) × \(last.reps)") }
                         stat("Sets logged", "\(history.count)")
                     }
+                    if let ex = exercise { yourNumbers(ex) }
                 }
             }
             .padding(20)
@@ -164,6 +165,23 @@ struct ExerciseDetailView: View {
             note.exercises.contains(ex.name) || harder.map(note.exercises.contains) == true
                 || !Set(note.avoid).isDisjoint(with: ex.flags)
         }?.rule
+    }
+
+    /// Estimated max from your latest session, and what it means for your goal.
+    @ViewBuilder
+    private func yourNumbers(_ ex: Exercise) -> some View {
+        let unit = SyncedSettings.unit
+        let records = history.map { SetRecord(date: $0.date, weight: $0.weight, reps: $0.reps, rpe: $0.rpe) }
+        if Calibration.applies(to: ex), let max = Strength.estimatedMax(from: records) {
+            let goal = TrainingGoal(rawValue: SyncedSettings.goal) ?? .buildMuscle
+            let range = RepScheme.range(for: ex, goal: goal)
+            Card {
+                SectionLabel("Your numbers")
+                Text("Estimated max: \(unit.format(pounds: max))").font(Theme.mono(15))
+                Text("\(goal.rawValue): \(unit.format(pounds: Strength.weight(forReps: range.lowerBound, max: max, unit: unit))) × \(range.lowerBound) up to \(unit.format(pounds: Strength.weight(forReps: range.upperBound, max: max, unit: unit))) × \(range.upperBound), with two reps left in the tank.")
+                    .font(.system(size: 14)).fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     private func stat(_ label: String, _ value: String) -> some View {
