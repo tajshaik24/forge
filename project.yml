@@ -6,12 +6,18 @@ options:
     iOS: "26.0"
     watchOS: "26.0"
   createIntermediateGroups: true
+configs:
+  Debug: debug
+  Release: release
+  # Free (Personal) Apple teams can't sign iCloud or push. This config drops those
+  # entitlements and builds with PERSONAL_TEAM: local storage, no Crews.
+  Personal: debug
 settings:
   base:
     SWIFT_VERSION: "5.0"
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
-    DEVELOPMENT_TEAM: ""   # set your team ID here (or in Xcode > Signing & Capabilities)
+    DEVELOPMENT_TEAM: "LDUCPMFSMH"
 targets:
   FORGE:
     type: application
@@ -21,6 +27,7 @@ targets:
       - path: Shared
     dependencies:
       - target: FORGEWatch
+      - target: FORGEWidgets
     info:
       path: FORGE/Info.plist
       properties:
@@ -30,21 +37,35 @@ targets:
         UIUserInterfaceStyle: Dark
         UIBackgroundModes: [remote-notification, workout-processing]
         CKSharingSupported: true
+        NSSupportsLiveActivities: true
         NSHealthShareUsageDescription: "FORGE reads your heart rate, sleep and heart-rate variability to track workouts and adjust today's training volume."
         NSHealthUpdateUsageDescription: "FORGE saves your strength workouts, heart rate and active calories to Apple Health so they appear in Fitness."
-    entitlements:
-      path: FORGE/FORGE.entitlements
-      properties:
-        com.apple.developer.healthkit: true
-        com.apple.developer.healthkit.access: []
-        com.apple.developer.icloud-container-identifiers: [iCloud.com.taj.forge]
-        com.apple.developer.icloud-services: [CloudKit]
-        com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)com.taj.forge
-        aps-environment: development
-        com.apple.developer.usernotifications.time-sensitive: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.taj.forge
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_ENTITLEMENTS: FORGE/FORGE.entitlements   # HealthKit, iCloud, push, time-sensitive
+      configs:
+        Personal:
+          CODE_SIGN_ENTITLEMENTS: FORGE/FORGE-Personal.entitlements
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) PERSONAL_TEAM
+
+  FORGEWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: FORGEWidgets
+      - path: FORGE/Activity/WorkoutActivity.swift
+      - path: Shared/Theme.swift
+    info:
+      path: FORGEWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: FORGE
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.taj.forge.widgets
         TARGETED_DEVICE_FAMILY: "1"
 
   FORGETests:
@@ -74,18 +95,14 @@ targets:
         WKBackgroundModes: [workout-processing]
         NSHealthShareUsageDescription: "FORGE reads your heart rate during workouts."
         NSHealthUpdateUsageDescription: "FORGE saves your strength workouts to Apple Health so they appear in Fitness."
-    entitlements:
-      path: FORGEWatch/FORGEWatch.entitlements
-      properties:
-        com.apple.developer.healthkit: true
-        com.apple.developer.healthkit.access: []
-        com.apple.developer.icloud-container-identifiers: [iCloud.com.taj.forge]
-        com.apple.developer.icloud-services: [CloudKit]
-        com.apple.developer.ubiquity-kvstore-identifier: $(TeamIdentifierPrefix)com.taj.forge
-        aps-environment: development
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.taj.forge.watchkitapp
+        CODE_SIGN_ENTITLEMENTS: FORGEWatch/FORGEWatch.entitlements
+      configs:
+        Personal:
+          CODE_SIGN_ENTITLEMENTS: FORGEWatch/FORGEWatch-Personal.entitlements
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) PERSONAL_TEAM
 
 schemes:
   FORGE:
@@ -97,3 +114,21 @@ schemes:
         - FORGETests
     run:
       config: Debug
+  FORGEWatch:
+    build:
+      targets:
+        FORGEWatch: all
+    run:
+      config: Debug
+  FORGE Personal:
+    build:
+      targets:
+        FORGE: all
+    run:
+      config: Personal
+  FORGEWatch Personal:
+    build:
+      targets:
+        FORGEWatch: all
+    run:
+      config: Personal

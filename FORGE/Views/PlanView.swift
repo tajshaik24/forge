@@ -33,6 +33,10 @@ struct PlanView: View {
                             .padding(.horizontal, 10).padding(.vertical, 6)
                             .background(Theme.surface, in: Capsule())
                     }
+                    if SyncedSettings.warmUps, !plan.warmUp.isEmpty {
+                        drills("Warm-up", plan.warmUp)
+                    }
+                    if !plan.exercises.isEmpty { SectionLabel("Workout") }
                     VStack(spacing: 0) {
                         ForEach(Array(plan.exercises.enumerated()), id: \.element.id) { i, ex in
                             NavigationLink { ExerciseDetailView(name: ex.name, planned: ex) } label: {
@@ -42,6 +46,7 @@ struct PlanView: View {
                             Divider().overlay(Theme.hairline)
                         }
                     }
+                    if !plan.coolDown.isEmpty { drills("Cool-down · optional", plan.coolDown) }
                 }
                 .padding(20)
             }
@@ -62,9 +67,34 @@ struct PlanView: View {
     }
 }
 
+extension PlanView {
+    /// Warm-up or cool-down as a compact list: name and dose, tap for the form guide.
+    func drills(_ title: String, _ items: [PlannedExercise]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SectionLabel(title)
+            ForEach(items) { item in
+                NavigationLink { ExerciseDetailView(name: item.name) } label: {
+                    HStack {
+                        Text(item.name).font(.system(size: 15))
+                        Spacer()
+                        Text(item.reps).font(Theme.mono(13)).foregroundStyle(Theme.muted)
+                        Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.muted)
+                    }
+                    .padding(.vertical, 9)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
 struct ExerciseRow: View {
     let index: Int
     let exercise: PlannedExercise
+
+    private var isTimed: Bool { ExerciseCatalog.named(exercise.name)?.isTimed ?? false }
+    private var isBodyweight: Bool { ExerciseCatalog.named(exercise.name)?.equipment.isEmpty ?? false }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -81,11 +111,11 @@ struct ExerciseRow: View {
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
-                Text("\(exercise.sets) × \(exercise.target.map { String($0.reps) } ?? exercise.reps)").font(Theme.mono(14))
+                Text("\(exercise.sets) × \(exercise.target.map { "\($0.reps)\(isTimed ? " s" : "")" } ?? exercise.reps)").font(Theme.mono(14))
                 if let t = exercise.target, t.weight > 0 {
                     Text(SyncedSettings.unit.format(pounds: t.weight)).font(Theme.mono(12, .medium)).foregroundStyle(Theme.muted)
                 } else if exercise.target == nil {
-                    Text("Find your weight").font(.system(size: 11)).foregroundStyle(Theme.muted)
+                    Text(isBodyweight ? "First time" : "Find your weight").font(.system(size: 11)).foregroundStyle(Theme.muted)
                 }
             }
             Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.muted)

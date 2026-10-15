@@ -4,8 +4,9 @@ import HealthKit
 /// Reads the recovery signals the coach uses. Everything stays on device.
 enum HealthService {
     @MainActor
-    static func snapshot(store: HKHealthStore = WorkoutTracker.shared.store) async -> HealthSnapshot {
+    static func snapshot(store: HKHealthStore? = nil) async -> HealthSnapshot {
         guard HKHealthStore.isHealthDataAvailable() else { return HealthSnapshot() }
+        let store = store ?? WorkoutTracker.shared.store
         async let sleep = lastNightSleepHours(store)
         async let hrv = hrvToday(store)
         async let baseline = hrvBaseline(store)

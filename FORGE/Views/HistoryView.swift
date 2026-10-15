@@ -13,28 +13,31 @@ struct HistoryView: View {
     private let unit = SyncedSettings.unit
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                overview
-                Picker("View", selection: $mode) {
-                    ForEach(Mode.allCases, id: \.self) { Text($0.rawValue) }
-                }
-                .pickerStyle(.segmented)
-                switch mode {
-                case .workouts: workouts
-                case .lifts: lifts
-                }
-            }
-            .padding(20)
-        }
-        .background(Theme.ground)
-        .navigationTitle("History")
-        .overlay {
+        Group {
             if sessions.isEmpty {
+                // Nothing to chart yet: an empty chart and picker under the message just collide with it.
                 ContentUnavailableView("No workouts yet", systemImage: "dumbbell",
                                        description: Text("Finished workouts and your progress on each lift show up here."))
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        overview
+                        Picker("View", selection: $mode) {
+                            ForEach(Mode.allCases, id: \.self) { Text($0.rawValue) }
+                        }
+                        .pickerStyle(.segmented)
+                        switch mode {
+                        case .workouts: workouts
+                        case .lifts: lifts
+                        }
+                    }
+                    .padding(20)
+                }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.ground)
+        .navigationTitle("History")
     }
 
     // MARK: Overview: last 8 weeks of volume + streak

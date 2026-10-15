@@ -7,9 +7,6 @@ struct ExerciseDetailView: View {
 
     @Query private var history: [SetEntry]
     @Query private var notes: [CoachNote]
-    @State private var tab: FormTab = .setup
-
-    enum FormTab: String, CaseIterable { case setup = "Setup", movement = "Movement", mistakes = "Mistakes" }
 
     init(name: String, planned: PlannedExercise? = nil) {
         self.name = name
@@ -25,54 +22,21 @@ struct ExerciseDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text(name.uppercased()).font(Theme.display(40))
-                if let ex = exercise {
-                    FlowRow {
-                        ForEach([ex.primary] + ex.secondary, id: \.self) { m in
-                            Text(m.label).font(.system(size: 12))
-                                .padding(.horizontal, 10).padding(.vertical, 5)
-                                .background(Theme.surface, in: Capsule())
-                                .overlay(Capsule().stroke(Theme.hairline))
-                        }
-                        if let r = planned?.replaces { NoteChip(text: "Replaces \(r.lowercased())") }
-                    }
-                    if !ex.equipment.isEmpty {
-                        Text("Needs: " + ex.equipment.map(\.label).sorted().joined(separator: ", "))
-                            .font(.system(size: 13)).foregroundStyle(Theme.muted)
-                    }
-                }
+                if let ex = exercise, ex.photo != nil { photos(ex) }
                 if let guide {
                     Text(guide.summary).font(.system(size: 15)).foregroundStyle(Theme.text.opacity(0.9))
-
-                    Picker("Form", selection: $tab) {
-                        ForEach(FormTab.allCases, id: \.self) { Text($0.rawValue) }
-                    }
-                    .pickerStyle(.segmented)
-
-                    let formSteps = steps(guide)
-                    VStack(alignment: .leading, spacing: 12) {
-                        ForEach(Array(formSteps.enumerated()), id: \.offset) { i, step in
-                            HStack(alignment: .top, spacing: 12) {
-                                Text(tab == .mistakes ? "!" : "\(i + 1)")
-                                    .font(Theme.mono(12))
-                                    .foregroundStyle(tab == .mistakes ? Theme.emberSoft : Theme.text)
-                                    .frame(width: 24, height: 24)
-                                    .background(Theme.raised, in: Circle())
-                                Text(step).font(.system(size: 15))
-                            }
-                        }
-                    }
-                }
-                if guide == nil, let notes = exercise?.customNotes {
+                } else if let notes = exercise?.customNotes {
                     Text(notes).font(.system(size: 15)).foregroundStyle(Theme.text.opacity(0.9))
                 }
+                if let ex = exercise { atAGlance(ex) }
+                // Personal first: the one thing on this page written for you.
                 if let cue = planned?.cue ?? relevantNote {
-                    HStack(alignment: .top, spacing: 10) {
-                        Image(systemName: "exclamationmark.circle").foregroundStyle(Theme.emberSoft)
-                        Text("Your cue: \(cue)").font(.system(size: 14))
-                    }
-                    .padding(14)
-                    .background(Theme.emberWash, in: RoundedRectangle(cornerRadius: 14))
+                    callout("person.fill", "Your cue", cue, tint: Theme.emberWash)
                 }
+                if let key = FormGuides.keyCue(for: name) {
+                    callout("lightbulb.fill", "Remember", key, tint: Theme.surface)
+                }
+                if let guide { howTo(guide) }
                 if !history.isEmpty {
                     SectionLabel("Your history")
                     HStack(spacing: 24) {
@@ -87,19 +51,119 @@ struct ExerciseDetailView: View {
         .background(Theme.ground)
     }
 
-    private func steps(_ guide: FormGuide) -> [String] {
-        switch tab {
-        case .setup: guide.setup
-        case .movement: guide.movement
-        case .mistakes: guide.mistakes
+    /// What it works, what you need, how many, and how big a lift it is.
+    private func atAGlance(_ ex: Exercise) -> some View {
+        Card {
+            glanceRow(ex.kind == .strength ? "Works" : "Feel it") {
+                if ex.kind != .strength, !ex.areas.isEmpty {
+                    return Text(BodyArea.allCases.filter(ex.areas.contains).map(\.label).joined(separator: ", "))
+                }
+                let others = ex.secondary.isEmpty ? "" : " + " + ex.secondary.map(\.label).joined(separator: ", ")
+                return Text("\(Text(ex.primary.label).bold().foregroundStyle(Theme.ember))\(others)")
+            }
+            glanceRow("Needs") {
+                Text(ex.equipment.isEmpty ? "Nothing, just you" : ex.equipment.map(\.label).sorted().joined(separator: ", "))
+            }
+            glanceRow("Do") { Text(dose(ex)) }
+            glanceRow("Type") { Text(typeText(ex)) }
+            if ex.helpsPosture { NoteChip(text: "Helps posture") }
+            if let r = planned?.replaces { NoteChip(text: "Easier stand-in for \(r.lowercased())") }
         }
     }
 
-    /// Show a coach note that touches this exercise's movement flags.
+    /// Start and finish positions, side by side.
+    private func photos(_ ex: Exercise) -> some View {
+        HStack(spacing: 8) {
+            ForEach([0, 1], id: \.self) { frame in
+                ExercisePhoto(exercise: ex, frame: frame)
+                    .aspectRatio(3 / 2, contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(alignment: .bottomLeading) {
+                        Text(frame == 0 ? "START" : "FINISH").font(Theme.label).tracking(1)
+                            .padding(.horizontal, 8).padding(.vertical, 4)
+                            .background(.black.opacity(0.55), in: Capsule())
+                            .foregroundStyle(.white)
+                            .padding(6)
+                    }
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func typeText(_ ex: Exercise) -> String {
+        switch ex.kind {
+        case .warmUp: ex.isGeneralWarmUp ? "Warm-up: gets your heart rate up" : "Warm-up: loosens you up for the lifts"
+        case .stretch: "Stretch: hold it, breathe, don't bounce"
+        case .strength: ex.isCompound ? "Big lift: works several muscles at once" : "Focused: targets one muscle"
+        }
+    }
+
+    private func glanceRow(_ label: String, @ViewBuilder _ value: () -> Text) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(label.uppercased()).font(Theme.label).tracking(1).foregroundStyle(Theme.muted)
+                .frame(width: 58, alignment: .leading)
+            value().font(.system(size: 15)).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// "3 sets × 8-12 · aim for 135 lb × 10", or the catalog's rep range when browsing.
+    private func dose(_ ex: Exercise) -> String {
+        guard let planned else { return ex.isTimed ? ex.reps : "\(ex.reps) reps per set" }
+        var text = "\(planned.sets) sets × \(planned.reps) reps"
+        if let t = planned.target {
+            text += t.weight > 0 ? " · aim for \(SyncedSettings.unit.format(pounds: t.weight)) × \(t.reps)" : " · aim for \(t.reps) reps"
+        }
+        return text
+    }
+
+    private func callout(_ icon: String, _ title: String, _ text: String, tint: Color) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon).foregroundStyle(Theme.emberSoft).frame(width: 20)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title.uppercased()).font(Theme.label).tracking(1).foregroundStyle(Theme.emberSoft)
+                Text(text).font(.system(size: 15, weight: .medium)).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(tint, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// Setup, the rep and the mistakes as one card: a single numbered sequence, then "!" lines to avoid.
+    private func howTo(_ guide: FormGuide) -> some View {
+        Card {
+            SectionLabel("How to do it")
+            ForEach(Array((guide.setup + guide.movement).enumerated()), id: \.offset) { i, step in
+                stepRow(marker: "\(i + 1)", step, warning: false)
+            }
+            if !guide.mistakes.isEmpty {
+                Divider().overlay(Theme.hairline)
+                ForEach(Array(guide.mistakes.enumerated()), id: \.offset) { _, mistake in
+                    stepRow(marker: "!", "Avoid: " + mistake.prefix(1).lowercased() + mistake.dropFirst(), warning: true)
+                }
+            }
+        }
+    }
+
+    private func stepRow(marker: String, _ text: String, warning: Bool) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(marker)
+                .font(Theme.mono(12))
+                .foregroundStyle(warning ? Theme.emberSoft : Theme.text)
+                .frame(width: 24, height: 24)
+                .background(warning ? Theme.emberWash : Theme.raised, in: Circle())
+            Text(text).font(.system(size: 15)).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// A coach note about this exercise, the lift it stands in for, or one of its movement types.
     private var relevantNote: String? {
         guard let ex = exercise else { return nil }
-        let touchesNote = notes.first { !Set($0.avoid).isDisjoint(with: [.axialLoading, .standingHeavy, .deepKneeBend]) }
-        return ex.primary == .quads || ex.primary == .hamstrings ? touchesNote?.rule : nil
+        let harder = ExerciseCatalog.harderVersion(of: ex.name)
+        return notes.first { note in
+            note.exercises.contains(ex.name) || harder.map(note.exercises.contains) == true
+                || !Set(note.avoid).isDisjoint(with: ex.flags)
+        }?.rule
     }
 
     private func stat(_ label: String, _ value: String) -> some View {

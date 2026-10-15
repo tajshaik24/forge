@@ -8,10 +8,44 @@ struct ExerciseLibraryView: View {
     @Query(sort: \CustomExercise.createdAt) private var custom: [CustomExercise]
     @State private var search = ""
     @State private var creating = false
+    @State private var shelf: Shelf = .strength
+
+    /// The library's tabs: the three kinds of exercise, plus posture work across all of them.
+    enum Shelf: String, CaseIterable, Identifiable {
+        case strength = "Strength", warmUp = "Warm-ups", stretch = "Stretches", posture = "Posture"
+        var id: String { rawValue }
+
+        func includes(_ ex: Exercise) -> Bool {
+            switch self {
+            case .strength: ex.kind == .strength
+            case .warmUp: ex.kind == .warmUp
+            case .stretch: ex.kind == .stretch
+            case .posture: ex.helpsPosture
+            }
+        }
+    }
+
+    private var shown: [Exercise] {
+        ExerciseCatalog.builtIn.filter {
+            shelf.includes($0) && (search.isEmpty || $0.name.localizedCaseInsensitiveContains(search))
+        }
+    }
 
     var body: some View {
         List {
-            if !custom.isEmpty {
+            Section {
+                Picker("Show", selection: $shelf) {
+                    ForEach(Shelf.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+            } footer: {
+                if shelf == .posture {
+                    Text("Moves that undo desk posture: they strengthen your upper back and deep core, and open tight chests and hips.")
+                }
+            }
+            if shelf == .strength, !custom.isEmpty {
                 Section("Yours") {
                     ForEach(custom) { item in
                         NavigationLink { ExerciseDetailView(name: item.name) } label: { row(item.exercise) }
@@ -24,16 +58,15 @@ struct ExerciseLibraryView: View {
                     }
                 }
             }
-            ForEach(MuscleGroup.allCases, id: \.self) { m in
-                let items = ExerciseCatalog.builtIn.filter {
-                    $0.primary == m && (search.isEmpty || $0.name.localizedCaseInsensitiveContains(search))
+            if shelf == .strength {
+                ForEach(MuscleGroup.allCases, id: \.self) { m in
+                    section(m.label, shown.filter { $0.primary == m })
                 }
-                if !items.isEmpty {
-                    Section(m.label) {
-                        ForEach(items, id: \.name) { ex in
-                            NavigationLink { ExerciseDetailView(name: ex.name) } label: { row(ex) }
-                        }
-                    }
+            } else {
+                // Warm-ups, stretches and posture work are grouped by where you feel them.
+                section("Get moving", shown.filter(\.isGeneralWarmUp))
+                ForEach(BodyArea.allCases, id: \.self) { area in
+                    section(area.label, shown.filter { !$0.isGeneralWarmUp && primaryArea(of: $0) == area })
                 }
             }
         }
@@ -45,11 +78,59 @@ struct ExerciseLibraryView: View {
         .sheet(isPresented: $creating) { CustomExerciseEditor() }
     }
 
+    @ViewBuilder
+    private func section(_ title: String, _ items: [Exercise]) -> some View {
+        if !items.isEmpty {
+            Section(title) {
+                ForEach(items, id: \.name) { ex in
+                    NavigationLink { ExerciseDetailView(name: ex.name) } label: { row(ex) }
+                }
+            }
+        }
+    }
+
+    /// One area per exercise so nothing is listed twice: the first that applies, in body order.
+    private func primaryArea(of ex: Exercise) -> BodyArea {
+        BodyArea.allCases.first(where: ex.areas.contains) ?? BodyArea.stretched(by: ex.primary).first ?? .upperBack
+    }
+
     private func row(_ ex: Exercise) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(ex.name).font(.system(size: 15, weight: .semibold))
-            Text(ex.equipment.isEmpty ? "Bodyweight" : ex.equipment.map(\.label).sorted().joined(separator: ", "))
-                .font(.system(size: 12)).foregroundStyle(Theme.muted)
+        HStack(spacing: 12) {
+            ExercisePhoto(exercise: ex, frame: 1).frame(width: 52, height: 40).clipShape(RoundedRectangle(cornerRadius: 8))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(ex.name).font(.system(size: 15, weight: .semibold))
+                Text(detail(ex)).font(.system(size: 12)).foregroundStyle(Theme.muted)
+            }
+        }
+    }
+
+    private func detail(_ ex: Exercise) -> String {
+        let kit = ex.equipment.isEmpty ? "Bodyweight" : ex.equipment.map(\.label).sorted().joined(separator: ", ")
+        return ex.kind == .strength ? kit : "\(ex.reps) · \(kit)"
+    }
+}
+
+/// A start or finish photo from the library, or a quiet placeholder when there isn't one.
+struct ExercisePhoto: View {
+    let exercise: Exercise
+    var frame = 0
+
+    var body: some View {
+        if let name = exercise.photo, let image = UIImage(named: "\(name)-\(frame).jpg") {
+            Image(uiImage: image).resizable().scaledToFill()
+        } else {
+            ZStack {
+                Theme.surface
+                Image(systemName: icon).font(.system(size: 16)).foregroundStyle(Theme.muted)
+            }
+        }
+    }
+
+    private var icon: String {
+        switch exercise.kind {
+        case .strength: "dumbbell"
+        case .warmUp: "figure.flexibility"
+        case .stretch: "figure.cooldown"
         }
     }
 }

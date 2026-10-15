@@ -48,10 +48,23 @@ struct WatchWorkoutView: View {
             await tracker.start(focus: plan.focus)
             prefill()
         }
+        .onChange(of: tracker.remoteSets.count) { if let set = tracker.remoteSets.last { loggedOnPhone(set) } }
+        .onChange(of: tracker.remoteRest) {
+            guard let change = tracker.remoteRest else { return }
+            restUntil = change.until
+            if change.until == nil { setStarted = .now }
+        }
+        .onChange(of: tracker.isRunning) {
+            // Ended from the iPhone.
+            guard !tracker.isRunning, !done else { return }
+            if tracker.discarded { dismiss() } else { done = true }
+        }
     }
 
     private func log(_ ex: PlannedExercise) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        // Holds and carries log seconds in place of reps.
+        let timed = ExerciseCatalog.named(ex.name)?.isTimed ?? false
+        return VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text("\(ex.name) · \(setNumber)/\(ex.sets)").font(.system(size: 13, weight: .heavy)).lineLimit(1)
                 Spacer()
@@ -64,13 +77,13 @@ struct WatchWorkoutView: View {
             }
             HStack(spacing: 6) {
                 valueBox(weight.formatted(.number.precision(.fractionLength(0...1))), unit.label, .weight)
-                valueBox("\(Int(reps))", "REPS", .reps)
+                valueBox("\(Int(reps))", timed ? "SEC" : "REPS", .reps)
             }
             .focusable()
             .digitalCrownRotation(editing == .weight ? $weight : $reps,
                                   from: editing == .weight ? 0 : 1,
-                                  through: editing == .weight ? 1000 : 50,
-                                  by: editing == .weight ? unit.step : 1,
+                                  through: editing == .weight ? 1000 : (timed ? 300 : 50),
+                                  by: editing == .weight ? unit.step : (timed ? 5 : 1),
                                   sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
             Button("Log set") { logSet(ex) }
                 .buttonStyle(.borderedProminent)
@@ -101,7 +114,7 @@ struct WatchWorkoutView: View {
                 Text(String(format: "%d:%02d", left / 60, left % 60)).font(Theme.mono(34)).monospacedDigit()
                 Label("\(Int(tracker.heartRate))", systemImage: "heart.fill").font(Theme.mono(14))
                 if let ex = current { Text("Next: \(ex.name) set \(setNumber)").font(.system(size: 12)).lineLimit(1) }
-                Button("Skip rest") { restUntil = nil; setStarted = .now }
+                Button("Skip rest") { restUntil = nil; setStarted = .now; tracker.shareRest(until: nil) }
             }
             .onChange(of: left) {
                 if left == 0 { WKInterfaceDevice.current().play(.stop); restUntil = nil; setStarted = .now }
@@ -110,9 +123,32 @@ struct WatchWorkoutView: View {
     }
 
     private func logSet(_ ex: PlannedExercise) {
-        SetLogger.log(exercise: ex.name, weight: unit.toPounds(weight), reps: Int(reps),
-                      focus: plan.focus, gymName: plan.gymName, setStarted: setStarted, in: ctx)
+        if tracker.isMirrored {
+            // The iPhone keeps the history; this adds the Health segment and sends it over.
+            let set = LoggedSet(exercise: ex.name, weight: unit.toPounds(weight), reps: Int(reps), rpe: nil,
+                                start: setStarted, end: .now)
+            Task { await tracker.recordSet(set) }
+        } else {
+            SetLogger.log(exercise: ex.name, weight: unit.toPounds(weight), reps: Int(reps),
+                          focus: plan.focus, gymName: plan.gymName, setStarted: setStarted, in: ctx)
+        }
         WKInterfaceDevice.current().play(.success)
+        advance(ex)
+    }
+
+    /// A set logged on the iPhone: move on as if it was logged here.
+    private func loggedOnPhone(_ set: LoggedSet) {
+        guard let ex = current else { return }
+        if set.exercise != ex.name {
+            guard let i = plan.exercises.firstIndex(where: { $0.name == set.exercise }) else { return }
+            exerciseIndex = i
+            setNumber = 1
+        }
+        WKInterfaceDevice.current().play(.click)
+        advance(plan.exercises[exerciseIndex])
+    }
+
+    private func advance(_ ex: PlannedExercise) {
         if setNumber < ex.sets {
             setNumber += 1
         } else if exerciseIndex + 1 < plan.exercises.count {
@@ -127,7 +163,9 @@ struct WatchWorkoutView: View {
     }
 
     private func finish() async {
+        let shared = tracker.isMirrored
         let result = await tracker.finish()
+        guard !shared else { done = true; return }   // the iPhone files it from the result
         let session = SetLogger.openSession(focus: plan.focus, gymName: plan.gymName, in: ctx)
         session.endDate = result?.end ?? .now
         if let r = result {

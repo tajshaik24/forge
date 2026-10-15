@@ -24,6 +24,15 @@ struct NoteSnapshot: Sendable, Hashable {
     let said: String
     let rule: String
     let avoid: Set<MovementFlag>
+    /// Specific exercises the note rules out; easier versions take their place.
+    var exercises: Set<String> = []
+
+    /// Keeps only what the athlete's words support, so one bad model call can't rule out
+    /// half the catalog. Also repairs notes saved before exercises were tracked.
+    func checked() -> NoteSnapshot {
+        let named = exercises.isEmpty ? Set(ExerciseCatalog.limited(in: said)) : exercises
+        return NoteSnapshot(said: said, rule: rule, avoid: MovementFlag.supported(avoid, by: said), exercises: named)
+    }
 }
 
 struct CoachContext: Sendable {
@@ -49,6 +58,8 @@ struct CoachContext: Sendable {
     var recentAvgRPE: Double?
     var experience: Experience = .intermediate
     var unit: WeightUnit = .lb
+    /// Plans open with a warm-up, which takes a few minutes out of the lifting time.
+    var warmUps = true
 
     var isToday: Bool { Calendar.current.isDateInToday(date) }
 
@@ -75,7 +86,13 @@ struct CoachContext: Sendable {
     }
 
     var avoid: Set<MovementFlag> { notes.reduce(into: []) { $0.formUnion($1.avoid) } }
-    var pool: [Exercise] { ExerciseCatalog.available(gym: equipment, avoiding: avoid) }
+    var limitedExercises: Set<String> { notes.reduce(into: []) { $0.formUnion($1.exercises) } }
+    /// Strength exercises allowed here: the gym has the kit, no note rules them out, and they're
+    /// at most one level above the athlete (no front squats in week one).
+    var pool: [Exercise] {
+        ExerciseCatalog.available(gym: equipment, avoiding: avoid, excluding: limitedExercises)
+            .filter { $0.level.rank <= experience.rank + 1 }
+    }
 
     func readiness(of template: FocusTemplate) -> Double {
         let values = template.muscles.map { readiness[$0] ?? 1 }
@@ -130,7 +147,15 @@ enum DayMatcher {
 protocol CoachEngine: Sendable {
     var displayName: String { get }
     func plan(for context: CoachContext) async throws -> PlannedWorkout
-    func reply(to message: String, context: CoachContext) async throws -> CoachReply
+    /// `onText` receives the reply text so far while it's being generated (engines that can't stream never call it).
+    func reply(to message: String, context: CoachContext,
+               onText: @escaping @MainActor @Sendable (String) -> Void) async throws -> CoachReply
+}
+
+extension CoachEngine {
+    func reply(to message: String, context: CoachContext) async throws -> CoachReply {
+        try await reply(to: message, context: context, onText: { _ in })
+    }
 }
 
 // MARK: - Readiness from logged sets
@@ -154,7 +179,7 @@ enum Readiness {
     static func summarize(_ session: WorkoutSession) -> SessionSummary {
         var counts: [MuscleGroup: Double] = [:]
         for set in session.sets ?? [] {
-            guard let ex = ExerciseCatalog.named(set.exercise) else { continue }
+            guard let ex = ExerciseCatalog.named(set.exercise), ex.kind == .strength else { continue }
             counts[ex.primary, default: 0] += 1
             for m in ex.secondary { counts[m, default: 0] += 0.5 }
         }
@@ -165,7 +190,7 @@ enum Readiness {
     static func summarize(_ plan: PlannedWorkout) -> SessionSummary {
         var counts: [MuscleGroup: Double] = [:]
         for e in plan.exercises {
-            guard let ex = ExerciseCatalog.named(e.name) else { continue }
+            guard let ex = ExerciseCatalog.named(e.name), ex.kind == .strength else { continue }
             counts[ex.primary, default: 0] += Double(e.sets)
             for m in ex.secondary { counts[m, default: 0] += Double(e.sets) / 2 }
         }
@@ -193,8 +218,10 @@ enum PlanFinisher {
             picked.append(e)
         }
 
-        // Top up from the pool if the draft came back thin.
-        let target = max(4, min(7, context.minutes / 8))
+        // Top up from the pool if the draft came back thin. About 8 minutes per exercise,
+        // after the warm-up has taken its share.
+        let liftingMinutes = context.minutes - (context.warmUps ? 6 : 0)
+        let target = max(4, min(7, liftingMinutes / 8))
         for m in muscles where picked.count < target {
             if let extra = pool.first(where: { $0.primary == m && !picked.map(\.name).contains($0.name) }) {
                 picked.append(PlannedExercise(name: extra.name, sets: min(3, context.experience.setRange.upperBound), reps: extra.reps))
@@ -203,8 +230,21 @@ enum PlanFinisher {
         picked = Array(picked.prefix(target))
         picked.sort { (ExerciseCatalog.named($0.name)?.isCompound ?? false) && !(ExerciseCatalog.named($1.name)?.isCompound ?? false) }
 
-        // Label swaps for the muscles where a staple was ruled out.
+        // A cue copied onto several exercises is boilerplate (e.g. a note restated), not coaching.
+        let cueCounts = Dictionary(picked.compactMap(\.cue).map { ($0, 1) }, uniquingKeysWith: +)
+        for i in picked.indices where (cueCounts[picked[i].cue ?? ""] ?? 0) >= 3 { picked[i].cue = nil }
+
+        // An easier version standing in for a lift a note ruled out: "Band-assisted pull-up · replaces Pull-up".
         var labelled = Set<MuscleGroup>()
+        for i in picked.indices {
+            guard let harder = ExerciseCatalog.harderVersion(of: picked[i].name),
+                  context.limitedExercises.contains(harder),
+                  let ex = ExerciseCatalog.named(picked[i].name), !labelled.contains(ex.primary) else { continue }
+            picked[i].replaces = harder
+            labelled.insert(ex.primary)
+        }
+
+        // Label swaps for the muscles where a staple was ruled out.
         for i in picked.indices {
             guard let ex = ExerciseCatalog.named(picked[i].name), ex.isCompound, !labelled.contains(ex.primary),
                   let blocked = ExerciseCatalog.blockedStaple(for: ex.primary, gym: context.equipment, avoiding: context.avoid)
@@ -237,7 +277,9 @@ enum PlanFinisher {
         let cautious = context.avoid.contains(.standingHeavy) || context.avoid.contains(.axialLoading)
         return PlannedWorkout(date: context.date, focus: focus, muscles: muscles, minutes: context.minutes,
                               reasons: Array(why.prefix(3)), exercises: picked,
-                              restSeconds: cautious ? 150 : 90, gymName: context.gymName, engine: engine)
+                              restSeconds: cautious ? 150 : 90, gymName: context.gymName, engine: engine,
+                              warmUp: WarmUps.warmUp(for: picked, context: context),
+                              coolDown: WarmUps.coolDown(for: muscles, context: context))
     }
 
     static func restDay(_ context: CoachContext, engine: String) -> PlannedWorkout {
@@ -271,9 +313,11 @@ struct RuleBasedCoach: CoachEngine {
                                    exercises: drafts, context: context, engine: displayName)
     }
 
-    func reply(to message: String, context: CoachContext) async throws -> CoachReply {
+    func reply(to message: String, context: CoachContext,
+               onText: @escaping @MainActor @Sendable (String) -> Void) async throws -> CoachReply {
         CoachReply(message: "Saved that as a note. Turn on the AI Coach to have your plan adapt to it.",
-                   note: NoteSnapshot(said: message, rule: message, avoid: []),
+                   note: NoteSnapshot(said: message, rule: message, avoid: [],
+                                      exercises: Set(ExerciseCatalog.limited(in: message))),
                    shouldReplan: false, minutesOverride: nil, targetDate: DayMatcher.date(in: message))
     }
 }

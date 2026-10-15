@@ -8,12 +8,21 @@ import SwiftData
 @Observable
 final class CoachStore {
     let engine: any CoachEngine
-    private(set) var plan: PlannedWorkout?
+    private(set) var plan: PlannedWorkout? {
+        didSet { if plan != oldValue { PhoneWatchLink.shared.send(plan: plan) } }
+    }
     private(set) var isThinking = false
+    /// The coach's reply so far, while it's being written.
+    private(set) var streamingReply: String?
+    /// The reply is in; the plan it asked for is being rebuilt.
+    private(set) var isReplanning = false
     private(set) var isPlanningWeek = false
     private(set) var readiness: [MuscleGroup: Double] = [:]
     private(set) var health = HealthSnapshot()
     var errorText: String?
+    /// The workout most recently finished, so an open workout screen can show its summary
+    /// even when the Watch ended it.
+    private(set) var lastFinished: WorkoutSession?
     /// Session-length overrides from chat, keyed by DayKey ("only 30 min today", "make Saturday shorter").
     private var minutesOverrides: [String: Int] = [:]
     /// Set when week planning is requested while a pass is already running (true = clear future plans first).
@@ -38,7 +47,7 @@ final class CoachStore {
             predicate: #Predicate { $0.date >= weekAgo }, sortBy: [SortDescriptor(\.date, order: .reverse)]))) ?? []
         let summaries = sessions.map(Readiness.summarize) + assumed.map(Readiness.summarize)
         let notes = ((try? ctx.fetch(FetchDescriptor<CoachNote>())) ?? [])
-            .map { NoteSnapshot(said: $0.said, rule: $0.rule, avoid: Set($0.avoid)) }
+            .map { NoteSnapshot(said: $0.said, rule: $0.rule, avoid: Set($0.avoid), exercises: Set($0.exercises)).checked() }
         let gym = DataStore.activeGym(in: ctx)
         let weekday = Calendar.current.component(.weekday, from: date)
         let ready = Readiness.compute(from: summaries.sorted { $0.date > $1.date }, now: date)
@@ -70,6 +79,7 @@ final class CoachStore {
         context.recentAvgRPE = avgRPE
         context.experience = SyncedSettings.experience
         context.unit = SyncedSettings.unit
+        context.warmUps = SyncedSettings.warmUps
         return context
     }
 
@@ -88,6 +98,13 @@ final class CoachStore {
     /// Uses the synced plan for today if another device already built one, unless `force`.
     func loadToday(_ ctx: ModelContext, force: Bool = false) async {
         DataStore.refreshCustomExercises(in: ctx)
+        var force = force
+        if repairNotes(ctx) {
+            // Plans built from the bad notes rule out the wrong things: build them again.
+            DataStore.clearFuturePlans(in: ctx)
+            force = true
+        }
+        addWarmUps(ctx)
         if !force, let synced = DataStore.todayPlan(in: ctx)?.plan {
             plan = synced
             _ = makeContext(ctx)   // refresh readiness for the UI
@@ -99,6 +116,36 @@ final class CoachStore {
             isThinking = false
         }
         await planWeek(ctx)
+    }
+
+    /// Plans saved before warm-ups existed get them added, without rebuilding the lifts.
+    private func addWarmUps(_ ctx: ModelContext) {
+        for var saved in DataStore.upcomingPlans(in: ctx)
+        where !saved.isRestDay && saved.warmUp.isEmpty && saved.coolDown.isEmpty {
+            let context = makeContext(ctx, date: saved.date)
+            saved.warmUp = WarmUps.warmUp(for: saved.exercises, context: context)
+            saved.coolDown = WarmUps.coolDown(for: saved.muscles, context: context)
+            DataStore.save(saved, in: ctx)
+        }
+    }
+
+    /// Re-checks saved notes (movement types the athlete's words don't support, exercises not
+    /// yet named). True if any changed.
+    private func repairNotes(_ ctx: ModelContext) -> Bool {
+        var changed = false
+        for note in (try? ctx.fetch(FetchDescriptor<CoachNote>())) ?? [] {
+            let checked = NoteSnapshot(said: note.said, rule: note.rule, avoid: Set(note.avoid),
+                                       exercises: Set(note.exercises)).checked()
+            let avoid = checked.avoid.map(\.rawValue).sorted()
+            let exercises = checked.exercises.sorted()
+            if avoid != note.avoidRaw.sorted() || exercises != note.exercises.sorted() {
+                note.avoidRaw = avoid
+                note.exercises = exercises
+                changed = true
+            }
+        }
+        if changed { try? ctx.save() }
+        return changed
     }
 
     /// Plans every upcoming training day this week that doesn't have a plan yet.
@@ -152,6 +199,47 @@ final class CoachStore {
         return built
     }
 
+    // MARK: Moving days around (calendar)
+
+    /// Moves a planned workout to another day this week. If that day has a workout, the two swap;
+    /// otherwise the day it left becomes a rest day (so week planning doesn't refill it).
+    func move(from: Date, to: Date, _ ctx: ModelContext) {
+        guard var moving = DataStore.todayPlan(in: ctx, date: from)?.plan, !moving.isRestDay else { return }
+        let displaced = DataStore.todayPlan(in: ctx, date: to)?.plan
+        moving.date = Calendar.current.startOfDay(for: to)
+        DataStore.save(moving, in: ctx)
+        if var other = displaced, !other.isRestDay {
+            other.date = Calendar.current.startOfDay(for: from)
+            DataStore.save(other, in: ctx)
+        } else {
+            DataStore.save(.rest(on: from, gymName: moving.gymName, engine: moving.engine), in: ctx)
+        }
+        refreshToday(ctx)
+    }
+
+    /// Takes a day off this week only; your training days stay as they are.
+    func makeRestDay(_ day: Date, _ ctx: ModelContext) {
+        let gym = DataStore.activeGym(in: ctx)?.name ?? "Gym"
+        DataStore.save(.rest(on: day, gymName: gym, engine: engine.displayName), in: ctx)
+        refreshToday(ctx)
+    }
+
+    /// Builds a workout for a day that isn't one of your training days (this week only).
+    func train(on day: Date, _ ctx: ModelContext) async {
+        isThinking = true
+        defer { isThinking = false }
+        let earlier = DataStore.upcomingPlans(in: ctx).filter { $0.date < Calendar.current.startOfDay(for: day) }
+        var context = makeContext(ctx, date: day, assumed: earlier)
+        context.isTrainingDay = true
+        guard let built = await build(context) else { return }
+        DataStore.save(built, in: ctx)
+        refreshToday(ctx)
+    }
+
+    private func refreshToday(_ ctx: ModelContext) {
+        if let today = DataStore.todayPlan(in: ctx)?.plan { plan = today }
+    }
+
     /// Notes, gym or schedule changed: rebuild today and the rest of the week.
     func invalidate(_ ctx: ModelContext) async {
         DataStore.clearFuturePlans(in: ctx)
@@ -194,26 +282,37 @@ final class CoachStore {
         ctx.insert(ChatEntry(fromUser: true, text: trimmed))
         try? ctx.save()
         isThinking = true
+        streamingReply = nil
 
         let context = makeContext(ctx)
         let reply: CoachReply
         do {
-            reply = try await engine.reply(to: trimmed, context: context)
+            reply = try await engine.reply(to: trimmed, context: context) { [weak self] text in
+                self?.streamingReply = text
+            }
         } catch {
             reply = (try? await RuleBasedCoach().reply(to: trimmed, context: context))
                 ?? CoachReply(message: "Sorry, I couldn't process that.", note: nil, shouldReplan: false, minutesOverride: nil)
         }
+        // Nothing streamed (built-in coach, or the model failed): type the reply out so it reads the same way.
+        if streamingReply == nil { await typeOut(reply.message) }
 
+        // Show the reply now; a replan can take a while and attaches to it when done.
         let entry = ChatEntry(fromUser: false, text: reply.message)
         if let note = reply.note {
-            ctx.insert(CoachNote(said: note.said, rule: note.rule, avoid: Array(note.avoid)))
-            try? ctx.save()
+            let note = note.checked()
+            ctx.insert(CoachNote(said: note.said, rule: note.rule, avoid: Array(note.avoid), exercises: note.exercises.sorted()))
             entry.savedNote = note.rule
         }
-        let day = reply.targetDate ?? .now
-        if let minutes = reply.minutesOverride { minutesOverrides[DayKey.of(day)] = minutes }
+        ctx.insert(entry)
+        try? ctx.save()
+        streamingReply = nil
         isThinking = false
 
+        let day = reply.targetDate ?? .now
+        if let minutes = reply.minutesOverride { minutesOverrides[DayKey.of(day)] = minutes }
+        isReplanning = true
+        defer { isReplanning = false }
         if reply.note != nil && reply.targetDate == nil {
             // A lasting note changes every upcoming plan.
             await invalidate(ctx)
@@ -221,8 +320,17 @@ final class CoachStore {
         } else if reply.shouldReplan || reply.targetDate != nil || reply.minutesOverride != nil {
             if let rebuilt = await replan(day: day, ctx) { entry.replannedDayKey = DayKey.of(rebuilt.date) }
         }
-        ctx.insert(entry)
         try? ctx.save()
+    }
+
+    /// Reveals a finished reply a few words at a time, like a streamed one.
+    private func typeOut(_ text: String) async {
+        var shown = ""
+        for word in text.split(separator: " ", omittingEmptySubsequences: false) {
+            shown += shown.isEmpty ? String(word) : " " + word
+            streamingReply = shown
+            try? await Task.sleep(for: .milliseconds(28))
+        }
     }
 
     func clearChat(_ ctx: ModelContext) {
@@ -249,6 +357,7 @@ final class CoachStore {
         minutesOverrides[DayKey.of(.now)] = nil
         RestAlerts.cancel()
         if SyncedSettings.crewBeta { Task { await CrewService.shared.postCheckIns(from: ctx) } }
+        lastFinished = session
         return session
     }
 }

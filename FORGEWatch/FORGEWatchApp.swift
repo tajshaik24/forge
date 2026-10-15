@@ -1,8 +1,14 @@
 import SwiftUI
 import SwiftData
+import HealthKit
+import WatchKit
 
 @main
 struct FORGEWatchApp: App {
+    @WKApplicationDelegateAdaptor(WatchAppDelegate.self) private var appDelegate
+
+    init() { PhoneWatchLink.shared.activate() }
+
     var body: some Scene {
         WindowGroup {
             NavigationStack { WatchPlanView() }
@@ -12,13 +18,24 @@ struct FORGEWatchApp: App {
     }
 }
 
-/// Today's plan, synced from the iPhone coach through iCloud.
+/// Starting a workout on the iPhone launches FORGE here (often in the background) to run it.
+final class WatchAppDelegate: NSObject, WKApplicationDelegate {
+    func handle(_ workoutConfiguration: HKWorkoutConfiguration) {
+        Task { @MainActor in
+            await WorkoutTracker.shared.start(focus: PhoneWatchLink.shared.todayPlan?.focus ?? "Workout")
+        }
+    }
+}
+
+/// Today's plan, from the iPhone over iCloud or sent directly when the phone is nearby.
 struct WatchPlanView: View {
     @Query(sort: \DailyPlan.updatedAt, order: .reverse) private var plans: [DailyPlan]
     @State private var training = false
+    private let link = PhoneWatchLink.shared
+    private let tracker = WorkoutTracker.shared
 
     private var today: PlannedWorkout? {
-        plans.first { $0.dayKey == DayKey.of(.now) }?.plan
+        plans.first { $0.dayKey == DayKey.of(.now) }?.plan ?? link.todayPlan
     }
 
     var body: some View {
@@ -42,13 +59,17 @@ struct WatchPlanView: View {
                             .padding(.top, 6)
                     }
                 } else {
-                    Text("Open FORGE on your iPhone to plan today. It syncs here through iCloud.")
+                    Text("Open FORGE on your iPhone to plan today. It shows up here once your iPhone is nearby.")
                         .font(.system(size: 13)).foregroundStyle(Theme.muted)
                 }
             }
         }
         .navigationDestination(isPresented: $training) {
             if let plan = today { WatchWorkoutView(plan: plan) }
+        }
+        // Started from the iPhone: go straight to the workout.
+        .onChange(of: tracker.isRunning, initial: true) {
+            if tracker.isRunning, today != nil { training = true }
         }
     }
 }

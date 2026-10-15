@@ -9,7 +9,60 @@ struct FormGuide: Sendable, Hashable {
 }
 
 enum FormGuides {
-    static func guide(for name: String) -> FormGuide? { all[name] }
+    static func guide(for name: String) -> FormGuide? { all[name] ?? library[name] }
+
+    /// The one thing to keep in mind mid-set, in plain words.
+    static func keyCue(for name: String) -> String? { keyCues[name] ?? libraryKeyCues[name] }
+
+    private static let keyCues: [String: String] = [
+        "Barbell bench press": "Shoulder blades pinched, bar touches your lower chest.",
+        "Dumbbell bench press": "Lower slowly, press up and slightly together.",
+        "Incline dumbbell press": "Press over your upper chest, not your face.",
+        "Cable fly": "Hug a big tree; keep the elbow bend fixed.",
+        "Push-up": "Body in one straight line, chest to the floor.",
+        "Dip": "Lower until upper arms are level, shoulders down.",
+        "Pull-up": "Pull elbows to your ribs, chin over the bar.",
+        "Band-assisted pull-up": "Lower slowly; don't let the band bounce you up.",
+        "Negative pull-up": "Take 3–5 seconds to lower. Slower is better.",
+        "Lat pulldown": "Pull the bar to your upper chest, not behind your neck.",
+        "Chest-supported dumbbell row": "Chest stays on the pad; pull elbows back.",
+        "One-arm dumbbell row": "Flat back, pull the weight to your hip.",
+        "Seated cable row": "Sit tall, squeeze shoulder blades together.",
+        "Barbell row": "Hinge, flat back, pull the bar to your belly.",
+        "Band pull-apart": "Straight arms, pull the band to your chest.",
+        "Standing barbell overhead press": "Squeeze glutes, press straight up, head through.",
+        "Seated neutral-grip dumbbell press": "Palms facing in, press up without arching.",
+        "Dumbbell lateral raise": "Raise to shoulder height, lead with elbows.",
+        "Cable face pull": "Pull the rope to your face, hands apart.",
+        "Reverse dumbbell fly": "Chest down, open arms wide like wings.",
+        "Dumbbell curl": "Elbows pinned to your sides; no swinging.",
+        "Incline dumbbell curl": "Arms hang behind you; curl without moving elbows.",
+        "Cable curl": "Elbows still, squeeze at the top.",
+        "Band curl": "Elbows pinned, lower slowly.",
+        "Cable triceps pushdown": "Elbows glued to your sides, straighten fully.",
+        "Dumbbell skull crusher": "Only your elbows bend; lower beside your head.",
+        "Close-grip push-up": "Hands under shoulders, elbows brush your ribs.",
+        "Back squat": "Brace, sit between your heels, knees follow toes.",
+        "Goblet squat": "Hold the weight at your chest, sit straight down.",
+        "Leg press": "Lower until knees are at 90°, don't lock out hard.",
+        "Smith machine squat": "Feet slightly forward, sit back under control.",
+        "Split squat (hand on bench)": "Drop your back knee straight down.",
+        "Bench step-up": "Push through the top foot; don't spring off the bottom one.",
+        "Leg extension": "Squeeze at the top, lower slowly.",
+        "Jump squat": "Land softly, knees bent, straight into the next rep.",
+        "Barbell deadlift": "Bar close, flat back, push the floor away.",
+        "Dumbbell Romanian deadlift": "Hips back, soft knees, weights slide down your legs.",
+        "Seated leg curl": "Curl all the way, lower slowly.",
+        "Banded leg curl": "Pull heels to glutes, hips stay down.",
+        "Kettlebell swing": "Snap your hips; arms just guide the bell.",
+        "Dumbbell hip thrust": "Chin tucked, squeeze glutes hard at the top.",
+        "Seated dumbbell calf raise": "Full stretch at the bottom, pause at the top.",
+        "Single-leg calf raise": "Go all the way up and all the way down.",
+        "Hanging knee raise": "Curl your hips up; no swinging.",
+        "Cable crunch": "Crunch ribs to hips; your hips don't move.",
+        "Dead bug": "Lower back stays pressed to the floor.",
+        "Pallof press": "Press out and don't let the cable twist you.",
+    ]
 
     private static func g(_ summary: String, setup: [String], move: [String], avoid: [String]) -> FormGuide {
         FormGuide(summary: summary, setup: setup, movement: move, mistakes: avoid)
@@ -46,6 +99,14 @@ enum FormGuides {
             setup: ["Grip just wider than shoulders, palms facing away.", "Hang with arms straight and abs braced."],
             move: ["Pull your elbows down toward your ribs until your chin clears the bar.", "Lower all the way down with control."],
             avoid: ["Kicking or swinging to get up.", "Cutting the bottom half short."]),
+        "Band-assisted pull-up": g("A pull-up with a loop band taking some of your weight. Use a thinner band as you get stronger, until you can do full pull-ups.",
+            setup: ["Loop the band over the bar and pull it through itself.", "Step or kneel into the band, then grip just wider than shoulders."],
+            move: ["Pull your elbows down toward your ribs until your chin clears the bar.", "Lower slowly all the way down; don't let the band fling you up."],
+            avoid: ["Using a band so thick the top half is effortless.", "Swinging or kicking to get up."]),
+        "Negative pull-up": g("Only the lowering half of a pull-up. Builds the strength for full reps when you can't pull yourself up yet.",
+            setup: ["Use a box or bench to get your chin above the bar.", "Grip just wider than shoulders and brace your abs."],
+            move: ["Step off and lower yourself as slowly as you can, about 3-5 seconds.", "At the bottom, step back up and reset for the next rep."],
+            avoid: ["Dropping the last third of the way down.", "Jumping up so hard you can't control the lowering."]),
         "Lat pulldown": g("A machine version of the pull-up that lets you pick the exact load.",
             setup: ["Lock your thighs under the pad and grip just outside shoulder width.", "Lean back slightly with your chest up."],
             move: ["Pull the bar to your upper chest, driving elbows down and back.", "Let it rise slowly until arms are straight."],

@@ -20,6 +20,11 @@ struct ActiveWorkoutView: View {
     @State private var finished: WorkoutSession?
     @State private var sheet: Sheet?
     @State private var restBuzz = 0
+    @State private var restStarted: Date?
+    @State private var phase: Phase = .lifting
+
+    /// Warm-up drills, then the lifts, then an optional cool-down.
+    enum Phase { case warmUp, lifting, coolDown }
 
     private let unit = SyncedSettings.unit
 
@@ -59,6 +64,13 @@ struct ActiveWorkoutView: View {
         Group {
             if let finished {
                 SummaryView(session: finished) { dismiss() }
+            } else if phase == .warmUp, let plan {
+                DrillsView(mode: .warmUp, drills: plan.warmUp, rampFor: exercises.first?.name, ramp: ramp) {
+                    withAnimation { phase = .lifting }
+                    setStarted = .now
+                }
+            } else if phase == .coolDown, let plan {
+                DrillsView(mode: .coolDown, drills: plan.coolDown) { finish() }
             } else if let current, let plan {
                 training(current, plan)
             } else {
@@ -67,6 +79,11 @@ struct ActiveWorkoutView: View {
         }
         .background(Theme.ground)
         .task {
+            // Warm up unless it's off, or this is a workout you're coming back to.
+            if SyncedSettings.warmUps, plan?.warmUp.isEmpty == false,
+               !exercises.contains(where: { !logged($0.name).isEmpty }) {
+                phase = .warmUp
+            }
             await RestAlerts.requestPermission()
             await tracker.start(focus: plan?.focus ?? "Workout")
             prefill()
@@ -84,6 +101,38 @@ struct ActiveWorkoutView: View {
             }
         }
         .sensoryFeedback(.success, trigger: restBuzz)
+        .onChange(of: tracker.remoteSets.count) { if let set = tracker.remoteSets.last { loggedOnWatch(set) } }
+        .onChange(of: tracker.remoteRest) {
+            guard let change = tracker.remoteRest else { return }
+            if let until = change.until { restUntil = until } else { endRest(share: false) }
+        }
+        .onChange(of: coach.lastFinished) { if let done = coach.lastFinished, finished == nil { finished = done } }
+        .onChange(of: restUntil) { old, new in if old == nil, new != nil { restStarted = .now } }
+        .onChange(of: liveState, initial: true) {
+            if let liveState, let plan {
+                LiveActivityController.show(liveState, focus: plan.focus, workoutStart: tracker.startDate ?? .now)
+            } else {
+                LiveActivityController.end()
+            }
+        }
+        .onDisappear { LiveActivityController.end() }
+        .onReceive(NotificationCenter.default.publisher(for: RestCommand.notification)) { note in
+            guard restUntil != nil else { return }
+            switch note.object as? RestCommand {
+            case .skip: endRest()
+            case .extend: extendRest()
+            case nil: break
+            }
+        }
+    }
+
+    /// What the Lock Screen / Dynamic Island shows. Nil once the workout is over.
+    private var liveState: WorkoutActivityAttributes.ContentState? {
+        guard finished == nil, phase == .lifting, let current else { return nil }
+        let resting = restUntil.map { $0 > .now } == true
+        return .init(exercise: current.name, setNumber: min(setNumber, current.sets), totalSets: current.sets,
+                     restStarted: resting ? restStarted : nil, restUntil: resting ? restUntil : nil,
+                     nextUp: nextUp, onWatch: tracker.isMirrored)
     }
 
     private func training(_ ex: PlannedExercise, _ plan: PlannedWorkout) -> some View {
@@ -114,10 +163,13 @@ struct ActiveWorkoutView: View {
 
                 if let target = ex.target {
                     Label(target.weight > 0
-                          ? "Target \(unit.format(pounds: target.weight)) × \(target.reps) · \(target.note)"
-                          : "Target \(target.reps) reps · \(target.note)",
+                          ? "Target \(unit.format(pounds: target.weight)) × \(target.reps)\(timed ? " s" : "") · \(target.note)"
+                          : "Target \(target.reps) \(timed ? "s" : "reps") · \(target.note)",
                           systemImage: "scope")
                         .font(.system(size: 13)).foregroundStyle(Theme.emberSoft)
+                } else if timed {
+                    Text("First time: hold for \(ex.reps), stopping while your form is still good.")
+                        .font(.system(size: 13)).foregroundStyle(Theme.muted)
                 } else {
                     Text("First time: pick a weight you could do for \(ex.reps) reps with 2 left in the tank.")
                         .font(.system(size: 13)).foregroundStyle(Theme.muted)
@@ -129,17 +181,17 @@ struct ActiveWorkoutView: View {
                 if let restUntil {
                     RestPanel(until: restUntil,
                               cue: plan.restSeconds > 90 ? "Breathe out as you press. Sit for 10 s before standing." : nil,
-                              done: endRest,
-                              extend: {
-                                  let later = restUntil.addingTimeInterval(30)
-                                  self.restUntil = later
-                                  RestAlerts.schedule(at: later, next: nextUp)
-                              })
+                              done: { endRest() },
+                              extend: extendRest)
                 } else {
                     Stepper(value: $weight, in: 0...1000, step: unit.step) {
                         valueLabel(weight.formatted(.number.precision(.fractionLength(0...1))), unit.label)
                     }
-                    Stepper(value: $reps, in: 1...50) { valueLabel("\(reps)", "REPS") }
+                    if timed {
+                        Stepper(value: $reps, in: 5...300, step: 5) { valueLabel("\(reps)", "SECONDS") }
+                    } else {
+                        Stepper(value: $reps, in: 1...50) { valueLabel("\(reps)", "REPS") }
+                    }
                     SectionLabel("How hard? (RPE)")
                     Picker("RPE", selection: $rpe) { ForEach(6...10, id: \.self) { Text("\($0)") } }
                         .pickerStyle(.segmented)
@@ -153,6 +205,9 @@ struct ActiveWorkoutView: View {
         }
     }
 
+    /// Holds and carries log seconds in place of reps.
+    private var timed: Bool { current.flatMap { ExerciseCatalog.named($0.name) }?.isTimed ?? false }
+
     private func header(_ plan: PlannedWorkout) -> some View {
         HStack {
             Button { tracker.discard(); RestAlerts.cancel(); dismiss() } label: { Image(systemName: "xmark") }
@@ -160,6 +215,12 @@ struct ActiveWorkoutView: View {
             Spacer()
             TimelineView(.periodic(from: .now, by: 1)) { _ in
                 HStack(spacing: 12) {
+                    if tracker.isStartingOnWatch {
+                        Label("Starting on Watch…", systemImage: "applewatch")
+                    } else if tracker.isMirrored {
+                        Image(systemName: "applewatch").foregroundStyle(Theme.ember)
+                            .accessibilityLabel("Shared with Apple Watch")
+                    }
                     Text(elapsed).monospacedDigit()
                     Label("\(Int(tracker.heartRate))", systemImage: "heart.fill")
                         .foregroundStyle(tracker.heartRate > 0 ? Theme.text : Theme.muted)
@@ -168,7 +229,7 @@ struct ActiveWorkoutView: View {
                 .font(Theme.mono(13)).foregroundStyle(Theme.muted)
             }
             Spacer()
-            Button("Finish") { Task { finished = await coach.finishWorkout(ctx) } }
+            Button("Finish") { finish() }
                 .font(.system(size: 15, weight: .semibold))
         }
     }
@@ -196,7 +257,7 @@ struct ActiveWorkoutView: View {
                     HStack {
                         Text("Set \(i + 1)").font(.system(size: 14, weight: .semibold))
                         Spacer()
-                        Text("\(unit.format(pounds: s.weight)) × \(s.reps)\(s.rpe.map { " · RPE \($0)" } ?? "")")
+                        Text("\(unit.format(pounds: s.weight)) × \(s.reps)\(timed ? " s" : "")\(s.rpe.map { " · RPE \($0)" } ?? "")")
                             .font(Theme.mono(13)).foregroundStyle(Theme.muted)
                         Image(systemName: "pencil").foregroundStyle(Theme.muted)
                     }
@@ -234,23 +295,63 @@ struct ActiveWorkoutView: View {
         let entry = SetLogger.log(exercise: ex.name, weight: unit.toPounds(weight), reps: reps, rpe: rpe,
                                   focus: plan.focus, gymName: plan.gymName, setStarted: setStarted, in: ctx)
         // @Query may or may not have refreshed yet: count earlier sets without the new one, then add it.
-        let doneCount = logged(ex.name).filter { $0 !== entry }.count + 1
+        advance(after: ex, doneCount: logged(ex.name).filter { $0 !== entry }.count + 1, plan)
+    }
+
+    /// A set logged on the Watch (already saved by the tracker): move on as if it was logged here.
+    private func loggedOnWatch(_ set: LoggedSet) {
+        guard let plan, let ex = exercises.first(where: { $0.name == set.exercise }) else { return }
+        let name = set.exercise
+        let start = Calendar.current.startOfDay(for: .now)
+        let count = (try? ctx.fetchCount(FetchDescriptor<SetEntry>(
+            predicate: #Predicate { $0.exercise == name && $0.date >= start }))) ?? 0
+        if let i = exercises.firstIndex(of: ex), i != exerciseIndex { exerciseIndex = i; prefill() }
+        // The Watch finishes on its own after its last set; its result files the workout here.
+        advance(after: ex, doneCount: count, plan, finishWhenDone: false)
+    }
+
+    private func advance(after ex: PlannedExercise, doneCount: Int, _ plan: PlannedWorkout, finishWhenDone: Bool = true) {
         let upNext = "\(ex.name) · set \(doneCount + 1) of \(ex.sets)"
         if doneCount >= ex.sets {
             if exerciseIndex + 1 < exercises.count {
                 exerciseIndex += 1
                 prefill()
             } else {
-                Task { finished = await coach.finishWorkout(ctx) }
+                guard finishWhenDone else { return }
+                if plan.coolDown.isEmpty { finish() } else { withAnimation { phase = .coolDown } }
                 return
             }
         }
         let until = Date().addingTimeInterval(TimeInterval(plan.restSeconds))
         restUntil = until
-        RestAlerts.schedule(at: until, next: doneCount < ex.sets ? upNext : nextUp)
+        scheduleRestAlert(at: until, next: doneCount < ex.sets ? upNext : nextUp)
     }
 
-    private func endRest() {
+    private func finish() {
+        Task { finished = await coach.finishWorkout(ctx) }
+    }
+
+    /// Lighter sets before the first lift, from its target weight.
+    private var ramp: [RampUp.Step] {
+        guard let first = exercises.first, let ex = ExerciseCatalog.named(first.name) else { return [] }
+        return RampUp.steps(for: ex, target: first.target, unit: unit)
+    }
+
+    private func extendRest() {
+        guard let restUntil else { return }
+        let later = restUntil.addingTimeInterval(30)
+        self.restUntil = later
+        scheduleRestAlert(at: later, next: nextUp)
+        tracker.shareRest(until: later)
+    }
+
+    /// In a shared workout the Watch buzzes when rest ends; a phone alert would buzz the wrist twice.
+    private func scheduleRestAlert(at date: Date, next: String) {
+        if !tracker.isMirrored { RestAlerts.schedule(at: date, next: next) }
+    }
+
+    private func endRest(share: Bool = true) {
+        if share, restUntil.map({ $0 > .now }) == true { tracker.shareRest(until: nil) }   // skipped early
         restUntil = nil
         setStarted = .now
         restBuzz += 1

@@ -38,10 +38,9 @@ struct WeekView: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     SectionLabel("Split")
-                    Picker("Split", selection: $split) {
-                        ForEach(SplitStyle.allCases) { Text($0.label).tag($0) }
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+                        ForEach(SplitStyle.allCases) { style in splitTile(style) }
                     }
-                    .pickerStyle(.segmented)
                     Stepper("Session length: \(minutes) min", value: $minutes, in: 20...120, step: 5)
                 }
 
@@ -64,6 +63,10 @@ struct WeekView: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     SectionLabel("Weekly sets by muscle")
+                    if setsByMuscle.isEmpty {
+                        Text("Log a workout this week to see how much each muscle got.")
+                            .font(.system(size: 13)).foregroundStyle(Theme.muted)
+                    }
                     ForEach(MuscleGroup.allCases.filter { (setsByMuscle[$0] ?? 0) > 0 }, id: \.self) { m in
                         let n = setsByMuscle[m] ?? 0
                         HStack {
@@ -83,6 +86,29 @@ struct WeekView: View {
         // The stepper fires on every tap, so rebuild once when you leave the screen.
         .onChange(of: minutes) { SyncedSettings.minutes = minutes; minutesChanged = true }
         .onDisappear { if minutesChanged { minutesChanged = false; replan() } }
+    }
+
+    private func splitTile(_ style: SplitStyle) -> some View {
+        let on = split == style
+        return Button { split = style } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(style.label)
+                    .font(.system(size: 15, weight: .heavy))
+                    .foregroundStyle(on ? Theme.text : Theme.text.opacity(0.85))
+                Text(style.detail)
+                    .font(.system(size: 12))
+                    .foregroundStyle(on ? Theme.emberSoft : Theme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, minHeight: 76, alignment: .topLeading)
+            .padding(12)
+            .background(on ? Theme.emberWash : Theme.surface, in: RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(on ? Theme.ember : Theme.hairline, lineWidth: on ? 2 : 1))
+            .multilineTextAlignment(.leading)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 
     // MARK: Rows: finished sessions this week, then today's and upcoming plans

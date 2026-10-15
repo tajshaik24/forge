@@ -83,7 +83,7 @@ struct GeneratedExercise {
     var sets: Int
     @Guide(description: "Rep target, e.g. \"8-10\" or \"12\"")
     var reps: String
-    @Guide(description: "Optional short technique or safety cue tied to the athlete's notes. Empty if none.")
+    @Guide(description: "Optional short technique or safety cue specific to this exercise. Empty if none. Never the same cue on several exercises.")
     var cue: String
 }
 
@@ -103,11 +103,19 @@ struct GeneratedDayPlan {
 struct GeneratedReply {
     @Guide(description: "Reply to the athlete in 1-3 short, practical sentences. If they report dizziness, lightheadedness, chest pain or sharp pain, also suggest checking with a doctor.")
     var message: String
+    @Guide(description: "Exact names of specific exercises the athlete can't do, wants to avoid, or that hurt, e.g. [\"Pull-up\"]. Empty if the feedback is about movement types in general or is positive.")
+    var exercises: [String]
     @Guide(description: "True only if the athlete shared a lasting limitation, preference or feedback that should change future workouts")
     var shouldRemember: Bool
     @Guide(description: "If remembering: one rule you will follow, e.g. \"No heavy standing squats; use supported leg movements\". Otherwise empty.")
     var rule: String
-    @Guide(description: "Movement types to rule out because of this feedback. Empty if none apply.")
+    @Guide(description: """
+        Movement types to rule out across ALL exercises. Usually empty. Only include a type the athlete's words clearly point to: \
+        axialLoading = bar resting on the spine (back squat, front squat); standingHeavy = heavy standing lifts (squat, deadlift), \
+        e.g. for dizziness or balance; overhead = pressing overhead, e.g. for shoulder pain; deepKneeBend = deep squats and lunges, \
+        e.g. for knee pain; jumping = plyometrics; floorTransitions = getting down to and up from the floor. \
+        A problem with one exercise (e.g. can't do pull-ups yet) goes in exercises, not here.
+        """)
     var avoid: [GenMovementFlag]
     @Guide(description: "True if the current plan should be rebuilt because of this message")
     var replan: Bool
@@ -168,6 +176,8 @@ struct AppleIntelligenceCoach: CoachEngine {
     - Prefer the focus whose muscles are most recovered, unless the split says otherwise.
     - Call findExercises for each muscle you train. Only use names it returns, copied exactly.
     - Respect every coach note. Never work around a note.
+    - A note about specific exercises applies only to those exercises, not to everything for that muscle.
+    - Leave cue empty unless it's specific to that exercise. Don't repeat a note as a cue.
     - Fit the session length: about 8 minutes per exercise.
     - Keep reasons short and specific to the numbers you were given.
     """
@@ -198,12 +208,20 @@ struct AppleIntelligenceCoach: CoachEngine {
                                    exercises: exercises, context: context, engine: displayName)
     }
 
-    func reply(to message: String, context: CoachContext) async throws -> CoachReply {
+    func reply(to message: String, context: CoachContext,
+               onText: @escaping @MainActor @Sendable (String) -> Void) async throws -> CoachReply {
         let session = LanguageModelSession(instructions: Self.chatInstructions)
         let prompt = CoachPrompts.chat(message, context)
-        let out = try await session.respond(to: prompt, generating: GeneratedReply.self).content
+        // `message` is GeneratedReply's first property, so it streams in before the bookkeeping fields.
+        let stream = session.streamResponse(to: prompt, generating: GeneratedReply.self)
+        for try await snapshot in stream {
+            if let text = snapshot.content.message, !text.isEmpty { await onText(text) }
+        }
+        let out = try await stream.collect().content
+        let named = out.exercises.compactMap { ExerciseCatalog.match($0)?.name }
         let note = out.shouldRemember
-            ? NoteSnapshot(said: message, rule: out.rule.isEmpty ? message : out.rule, avoid: Set(out.avoid.compactMap(\.flag)))
+            ? NoteSnapshot(said: message, rule: out.rule.isEmpty ? message : out.rule, avoid: Set(out.avoid.compactMap(\.flag)),
+                           exercises: Set(named.isEmpty ? ExerciseCatalog.limited(in: message) : named)).checked()
             : nil
         // Trust an explicit day name in the message over the model's pick.
         let target = DayMatcher.date(in: message) ?? out.day.date
@@ -236,7 +254,9 @@ enum CoachPrompts {   // not "PromptBuilder": that name is a FoundationModels re
         if c.isToday, let h = c.health.hrv, let b = c.health.hrvBaseline { lines.append("HRV \(Int(h)) ms vs baseline \(Int(b)) ms.") }
         if !c.notes.isEmpty {
             lines.append("Coach notes to respect:")
-            for n in c.notes { lines.append("- \(n.rule)") }
+            for n in c.notes {
+                lines.append(n.exercises.isEmpty ? "- \(n.rule)" : "- Only about \(n.exercises.sorted().joined(separator: ", ")): \(n.rule)")
+            }
         }
         lines.append("Build the session.")
         return lines.joined(separator: "\n")
@@ -248,6 +268,12 @@ enum CoachPrompts {   // not "PromptBuilder": that name is a FoundationModels re
             lines.append("Today's plan: \(p.focus) at \(p.gymName) — " + p.exercises.map(\.name).joined(separator: ", ") + ".")
         }
         if !c.notes.isEmpty { lines.append("Existing notes: " + c.notes.map(\.rule).joined(separator: "; ")) }
+        // Point the reply at moves the app can actually program.
+        for name in ExerciseCatalog.mentioned(in: message) {
+            if let easier = ExerciseCatalog.easierVersions[name] {
+                lines.append("Easier versions of \(name) in the app: " + easier.joined(separator: ", ") + ".")
+            }
+        }
         lines.append("Athlete says: \"\(message)\"")
         return lines.joined(separator: "\n")
     }

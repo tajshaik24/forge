@@ -13,6 +13,7 @@ enum MuscleGroup: String, CaseIterable, Codable, Sendable, Hashable {
 enum Equipment: String, CaseIterable, Codable, Sendable, Hashable, Identifiable {
     case dumbbells, bench, pullUpBar, bands, kettlebell, barbell, squatRack
     case cableStack, legPress, legCurl, legExtension, smithMachine, dipStation, rower
+    case machines, bike, foamRoller
 
     var id: String { rawValue }
 
@@ -32,6 +33,79 @@ enum Equipment: String, CaseIterable, Codable, Sendable, Hashable, Identifiable 
         case .smithMachine: "Smith machine"
         case .dipStation: "Dip station"
         case .rower: "Rower"
+        case .machines: "Weight machines"
+        case .bike: "Exercise bike"
+        case .foamRoller: "Foam roller"
+        }
+    }
+
+    /// Added after the first release. Gyms that had everything before get these too.
+    static let addedInLibraryV2: Set<Equipment> = [.machines, .bike, .foamRoller]
+}
+
+/// What an exercise is for. Only `.strength` counts toward volume, readiness and progression.
+enum ExerciseKind: String, CaseIterable, Codable, Sendable, Hashable {
+    case strength, warmUp, stretch
+
+    var label: String {
+        switch self {
+        case .strength: "Strength"
+        case .warmUp: "Warm-up & mobility"
+        case .stretch: "Stretches"
+        }
+    }
+}
+
+/// The shape of a lift. A balanced week covers each pattern; a session slot asks for one.
+enum MovementPattern: String, CaseIterable, Codable, Sendable, Hashable {
+    case squat, lunge, hinge, horizontalPush, verticalPush, horizontalPull, verticalPull, carry, core
+
+    var label: String {
+        switch self {
+        case .squat: "Squat"
+        case .lunge: "Lunge"
+        case .hinge: "Hinge"
+        case .horizontalPush: "Push"
+        case .verticalPush: "Overhead push"
+        case .horizontalPull: "Row"
+        case .verticalPull: "Pull-down"
+        case .carry: "Carry"
+        case .core: "Core"
+        }
+    }
+}
+
+/// Body areas for mobility, stretching and tight spots.
+enum BodyArea: String, CaseIterable, Codable, Sendable, Hashable {
+    case neck, shoulders, chest, upperBack, lowerBack, hips, glutes, quads, hamstrings, calves
+
+    var label: String {
+        switch self {
+        case .neck: "Neck"
+        case .shoulders: "Shoulders"
+        case .chest: "Chest"
+        case .upperBack: "Upper back"
+        case .lowerBack: "Lower back"
+        case .hips: "Hips"
+        case .glutes: "Glutes"
+        case .quads: "Quads"
+        case .hamstrings: "Hamstrings"
+        case .calves: "Calves & ankles"
+        }
+    }
+
+    /// Where a trained muscle wants stretching afterwards.
+    static func stretched(by muscle: MuscleGroup) -> Set<BodyArea> {
+        switch muscle {
+        case .chest: [.chest, .shoulders]
+        case .back: [.upperBack]
+        case .shoulders: [.shoulders]
+        case .biceps, .triceps: [.shoulders]
+        case .quads: [.quads, .hips]
+        case .hamstrings: [.hamstrings]
+        case .glutes: [.glutes, .hips]
+        case .calves: [.calves]
+        case .core: [.lowerBack]
         }
     }
 }
@@ -51,11 +125,32 @@ enum MovementFlag: String, CaseIterable, Codable, Sendable, Hashable {
         case .floorTransitions: "Floor-to-standing"
         }
     }
+
+    /// Words that point at this movement type. A flag the model picks only sticks if the
+    /// athlete's own words mention one of these (it once ruled out all six for "I can't do a pull-up").
+    private var cues: [String] {
+        switch self {
+        case .axialLoading: ["squat", "spine", "back pain", "lower back", "barbell on", "dizzy", "lightheaded", "light-headed", "faint"]
+        case .standingHeavy: ["squat", "deadlift", "standing", "balance", "dizzy", "lightheaded", "light-headed", "faint", "blood pressure"]
+        case .overhead: ["overhead", "shoulder", "above my head", "military press", "ohp"]
+        case .deepKneeBend: ["knee", "squat", "lunge", "deep"]
+        case .jumping: ["jump", "plyo", "impact", "box"]
+        case .floorTransitions: ["floor", "ground", "kneel", "get up", "getting up", "lie down", "lying down"]
+        }
+    }
+
+    static func supported(_ flags: some Sequence<MovementFlag>, by text: String) -> Set<MovementFlag> {
+        let lower = text.lowercased()
+        return Set(flags.filter { flag in flag.cues.contains { lower.contains($0) } })
+    }
 }
 
 enum Experience: String, CaseIterable, Codable, Sendable, Identifiable {
     case new, intermediate, advanced
     var id: String { rawValue }
+
+    /// 0 = new … 2 = advanced.
+    var rank: Int { Self.allCases.firstIndex(of: self) ?? 0 }
 
     var label: String {
         switch self {
@@ -93,6 +188,16 @@ enum SplitStyle: String, CaseIterable, Codable, Sendable, Identifiable {
         case .pushPullLegs: "Push · Pull · Legs"
         case .upperLower: "Upper · Lower"
         case .fullBody: "Full body"
+        }
+    }
+
+    /// What the split means, and the week it suits.
+    var detail: String {
+        switch self {
+        case .coachDecides: "Picks each day from what's recovered"
+        case .pushPullLegs: "Chest & arms, back, legs · 3 or 6 days"
+        case .upperLower: "Alternates upper and lower · 2 or 4 days"
+        case .fullBody: "Whole body every session · 2–3 days"
         }
     }
 
@@ -143,9 +248,56 @@ struct PlannedWorkout: Codable, Sendable, Hashable {
     var restSeconds: Int
     var gymName: String
     var engine: String
+    /// Drills before the first lift. Not logged or counted as volume.
+    var warmUp: [PlannedExercise] = []
+    /// Stretches after the last lift. Optional, also not logged.
+    var coolDown: [PlannedExercise] = []
 
     var totalSets: Int { exercises.reduce(0) { $0 + $1.sets } }
     var isRestDay: Bool { exercises.isEmpty }
+
+    private enum CodingKeys: String, CodingKey {
+        case date, focus, muscles, minutes, reasons, exercises, restSeconds, gymName, engine, warmUp, coolDown
+    }
+
+    /// Plans saved before warm-ups existed decode with empty warm-up and cool-down.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        date = try c.decode(Date.self, forKey: .date)
+        focus = try c.decode(String.self, forKey: .focus)
+        muscles = try c.decode([MuscleGroup].self, forKey: .muscles)
+        minutes = try c.decode(Int.self, forKey: .minutes)
+        reasons = try c.decode([String].self, forKey: .reasons)
+        exercises = try c.decode([PlannedExercise].self, forKey: .exercises)
+        restSeconds = try c.decode(Int.self, forKey: .restSeconds)
+        gymName = try c.decode(String.self, forKey: .gymName)
+        engine = try c.decode(String.self, forKey: .engine)
+        warmUp = try c.decodeIfPresent([PlannedExercise].self, forKey: .warmUp) ?? []
+        coolDown = try c.decodeIfPresent([PlannedExercise].self, forKey: .coolDown) ?? []
+    }
+
+    init(date: Date, focus: String, muscles: [MuscleGroup], minutes: Int, reasons: [String],
+         exercises: [PlannedExercise], restSeconds: Int, gymName: String, engine: String,
+         warmUp: [PlannedExercise] = [], coolDown: [PlannedExercise] = []) {
+        self.date = date
+        self.focus = focus
+        self.muscles = muscles
+        self.minutes = minutes
+        self.reasons = reasons
+        self.exercises = exercises
+        self.restSeconds = restSeconds
+        self.gymName = gymName
+        self.engine = engine
+        self.warmUp = warmUp
+        self.coolDown = coolDown
+    }
+
+    /// A day off. Saved as a plan so week planning leaves the day alone.
+    static func rest(on day: Date, gymName: String, engine: String) -> PlannedWorkout {
+        PlannedWorkout(date: Calendar.current.startOfDay(for: day), focus: "Rest", muscles: [], minutes: 0,
+                       reasons: ["Rest day. Walk, stretch, sleep."], exercises: [], restSeconds: 0,
+                       gymName: gymName, engine: engine)
+    }
 }
 
 enum DayKey {
@@ -157,7 +309,12 @@ enum DayKey {
 
 /// Settings live in iCloud key-value storage so the Watch and iPad see the same schedule.
 enum SyncedSettings {
+    #if PERSONAL_TEAM
+    /// Free Apple teams can't sign iCloud key-value storage, so settings stay on this device.
+    private static let kv = LocalSettingsStore()
+    #else
     private static var kv: NSUbiquitousKeyValueStore { .default }
+    #endif
 
     static var trainingWeekdays: Set<Int> {   // 1 = Sunday … 7 = Saturday (Calendar weekday)
         get {
@@ -190,6 +347,12 @@ enum SyncedSettings {
         set { kv.set(newValue.rawValue, forKey: "unit"); kv.synchronize() }
     }
 
+    /// Warm-up drills before each workout. On by default; any single workout can skip them.
+    static var warmUps: Bool {
+        get { kv.object(forKey: "warmUps") as? Bool ?? true }
+        set { kv.set(newValue, forKey: "warmUps"); kv.synchronize() }
+    }
+
     static var experience: Experience {
         get { Experience(rawValue: kv.string(forKey: "experience") ?? "") ?? .intermediate }
         set { kv.set(newValue.rawValue, forKey: "experience"); kv.synchronize() }
@@ -197,7 +360,13 @@ enum SyncedSettings {
 
     /// Crews (beta): shared weekly streaks with friends over CloudKit.
     static var crewBeta: Bool {
-        get { kv.bool(forKey: "crewBeta") }
+        get {
+            #if PERSONAL_TEAM
+            false   // Crews run on CloudKit
+            #else
+            kv.bool(forKey: "crewBeta")
+            #endif
+        }
         set { kv.set(newValue, forKey: "crewBeta"); kv.synchronize() }
     }
 
@@ -211,3 +380,17 @@ enum SyncedSettings {
         }
     }
 }
+
+#if PERSONAL_TEAM
+/// The slice of `NSUbiquitousKeyValueStore` that `SyncedSettings` uses, backed by `UserDefaults`.
+struct LocalSettingsStore {
+    private var defaults: UserDefaults { .standard }
+    func array(forKey key: String) -> [Any]? { defaults.array(forKey: key) }
+    func string(forKey key: String) -> String? { defaults.string(forKey: key) }
+    func bool(forKey key: String) -> Bool { defaults.bool(forKey: key) }
+    func longLong(forKey key: String) -> Int64 { Int64(defaults.integer(forKey: key)) }
+    func object(forKey key: String) -> Any? { defaults.object(forKey: key) }
+    func set(_ value: Any?, forKey key: String) { defaults.set(value, forKey: key) }
+    @discardableResult func synchronize() -> Bool { true }
+}
+#endif

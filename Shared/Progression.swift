@@ -69,10 +69,13 @@ enum Progression {
         let easyEffort = (avgRPE ?? 8) <= 7.5
 
         if isBodyweight {
+            // Holds progress in 5-second steps; "reps" are seconds for them.
+            let word = exercise.isTimed ? "s" : "reps"
+            let more = exercise.isTimed ? 5 : 1
             if minReps >= range.upperBound, !hardEffort, signal != .holdBack {
-                return LoadTarget(weight: 0, reps: minReps + 1, note: "Beat last time: \(minReps + 1) reps")
+                return LoadTarget(weight: 0, reps: minReps + more, note: "Beat last time: \(minReps + more) \(word)")
             }
-            return LoadTarget(weight: 0, reps: max(minReps, range.lowerBound), note: "Match \(max(minReps, range.lowerBound)) reps")
+            return LoadTarget(weight: 0, reps: max(minReps, range.lowerBound), note: "Match \(max(minReps, range.lowerBound)) \(word)")
         }
 
         let jump = increment(for: exercise, unit: unit)

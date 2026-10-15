@@ -63,12 +63,15 @@ final class CoachNote {
     var said: String = ""
     var rule: String = ""
     var avoidRaw: [String] = []
+    /// Catalog names this note is about ("Pull-up"). It applies to these, not the whole muscle.
+    var exercises: [String] = []
     var createdAt: Date = Date.now
 
-    init(said: String, rule: String, avoid: [MovementFlag], createdAt: Date = .now) {
+    init(said: String, rule: String, avoid: [MovementFlag], exercises: [String] = [], createdAt: Date = .now) {
         self.said = said
         self.rule = rule
         self.avoidRaw = avoid.map(\.rawValue)
+        self.exercises = exercises
         self.createdAt = createdAt
     }
 
@@ -177,6 +180,16 @@ enum DataStore {
     /// Syncs through the user's private iCloud database. Falls back to on-device storage
     /// if iCloud isn't set up (e.g. a simulator not signed in), so the app still runs.
     @MainActor static let shared: ModelContainer = {
+        // Unit tests host the app unsigned, without the iCloud entitlement CloudKit mirroring requires.
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+            let memory = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
+            return try! ModelContainer(for: schema, configurations: [memory])
+        }
+        #if PERSONAL_TEAM
+        // Free Apple teams can't sign iCloud, and SwiftData traps if asked for CloudKit without it.
+        do { return try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, cloudKitDatabase: .none)]) }
+        catch { fatalError("Could not create ModelContainer: \(error)") }
+        #else
         do {
             let config = ModelConfiguration(schema: schema, cloudKitDatabase: .private(cloudContainerID))
             return try ModelContainer(for: schema, configurations: [config])
@@ -186,6 +199,7 @@ enum DataStore {
             do { return try ModelContainer(for: schema, configurations: [local]) }
             catch { fatalError("Could not create ModelContainer: \(error)") }
         }
+        #endif
     }()
 
     @MainActor
@@ -271,6 +285,11 @@ enum Seed {
             var seen = Set<String>()
             for g in gyms {
                 if seen.contains(g.name) { context.delete(g) } else { seen.insert(g.name) }
+            }
+            // A gym that had every piece of equipment before library v2 gets the new kinds too.
+            let before = Set(Equipment.allCases).subtracting(Equipment.addedInLibraryV2)
+            for g in gyms where g.equipment.isSuperset(of: before) && !g.equipment.isSuperset(of: Equipment.addedInLibraryV2) {
+                g.equipment.formUnion(Equipment.addedInLibraryV2)
             }
         }
         try? context.save()
