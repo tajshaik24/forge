@@ -2,7 +2,7 @@ import Testing
 import Foundation
 @testable import FORGE
 
-@Suite("Find your weight")
+@Suite("Find your starting weight")
 struct StrengthTests {
     private let bench = ExerciseCatalog.named("Barbell bench press")!
     private let curl = ExerciseCatalog.named("Dumbbell curl")!

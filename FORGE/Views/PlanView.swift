@@ -102,7 +102,7 @@ struct ExerciseRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(exercise.name).font(.system(size: 16, weight: .bold))
                 if exercise.calibrate == true {
-                    Text("Find your weight: test sets first").font(.system(size: 12)).foregroundStyle(Theme.emberSoft)
+                    Text("Find your starting weight: test sets first").font(.system(size: 12)).foregroundStyle(Theme.emberSoft)
                 } else if let replaced = exercise.replaces {
                     Text("Replaces \(replaced.lowercased())").font(.system(size: 12)).foregroundStyle(Theme.emberSoft)
                 } else if let note = exercise.target?.note {
@@ -117,7 +117,7 @@ struct ExerciseRow: View {
                 if let t = exercise.target, t.weight > 0 {
                     Text(SyncedSettings.unit.format(pounds: t.weight)).font(Theme.mono(12, .medium)).foregroundStyle(Theme.muted)
                 } else if exercise.target == nil {
-                    Text(isBodyweight ? "First time" : "Find your weight").font(.system(size: 11)).foregroundStyle(Theme.muted)
+                    Text(isBodyweight ? "First time" : "Test sets").font(.system(size: 11)).foregroundStyle(Theme.muted)
                 }
             }
             Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.muted)

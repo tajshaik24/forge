@@ -634,7 +634,7 @@ struct CalibrationCard: View {
                     .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.emberSoft)
                 Text(RepScheme.summary(for: goal)).font(.system(size: 12)).foregroundStyle(Theme.muted)
             } else {
-                SectionLabel("Find your weight · test set \(tests.count + 1)")
+                SectionLabel("Find your starting weight · set \(tests.count + 1)")
                 Text(tests.isEmpty
                      ? "First time on this lift. Do \(testReps) reps with a weight you're sure about, then rate how hard it was. We'll suggest the next weight until a set feels like an 8: two reps left in the tank."
                      : "Do \(testReps) reps at the suggested weight. Rate it honestly. An 8 means you could have done two more.")

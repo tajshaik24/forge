@@ -69,7 +69,7 @@ enum Strength {
     }
 }
 
-/// "Find your weight": test sets the first time you do a weighted lift.
+/// "Find your starting weight": test sets the first time you do a weighted lift.
 enum Calibration {
     /// Big lifts test at 5 reps (a close estimate of your max); smaller ones at 10.
     static func testReps(for exercise: Exercise) -> Int { exercise.isCompound ? 5 : 10 }
