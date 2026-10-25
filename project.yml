@@ -34,7 +34,6 @@ targets:
         CFBundleDisplayName: FORGE
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
-        UIUserInterfaceStyle: Dark
         UIBackgroundModes: [remote-notification, workout-processing]
         CKSharingSupported: true
         NSSupportsLiveActivities: true

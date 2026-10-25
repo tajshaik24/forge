@@ -26,7 +26,7 @@ struct DrillsView: View {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(mode == .warmUp ? "WARM-UP" : "COOL-DOWN").font(Theme.display(44))
+                        Text(mode == .warmUp ? "WARM-UP" : "COOL-DOWN").font(Theme.display(36))
                         Text("About \(minutes) min · \(mode == .warmUp ? "gets you ready to lift" : "optional, eases you out")")
                             .font(.system(size: 13)).foregroundStyle(Theme.muted)
                     }
@@ -48,7 +48,7 @@ struct DrillsView: View {
                 if let rampFor, !ramp.isEmpty { rampCard(rampFor) }
 
                 Button(mode == .warmUp ? "Start lifting" : "Finish workout", action: onDone)
-                    .buttonStyle(EmberButtonStyle())
+                    .buttonStyle(AccentButtonStyle())
             }
             .padding(20)
         }
@@ -79,7 +79,7 @@ struct DrillsView: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(drill.name).font(.system(size: 22, weight: .bold))
                 Spacer()
-                Text(drill.reps).font(Theme.mono(15)).foregroundStyle(Theme.emberSoft)
+                Text(drill.reps).font(Theme.mono(15)).foregroundStyle(Theme.accentText)
             }
             if let cue = FormGuides.keyCue(for: drill.name) {
                 Text(cue).font(.system(size: 14)).foregroundStyle(Theme.text.opacity(0.85))
@@ -87,7 +87,7 @@ struct DrillsView: View {
             if let seconds = dose.seconds {
                 timer(seconds: seconds, sides: dose.sides)
             } else {
-                Button("Done") { next() }.buttonStyle(EmberButtonStyle())
+                Button("Done") { next() }.buttonStyle(AccentButtonStyle())
             }
         }
     }
@@ -103,9 +103,9 @@ struct DrillsView: View {
                         .frame(maxWidth: .infinity)
                     if let switchAt {
                         Text(left > switchAt ? "First side" : "Switch sides").font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Theme.emberSoft).frame(maxWidth: .infinity)
+                            .foregroundStyle(Theme.accentText).frame(maxWidth: .infinity)
                     }
-                    Button("Next") { next() }.buttonStyle(EmberButtonStyle())
+                    Button("Next") { next() }.buttonStyle(AccentButtonStyle())
                 }
                 .onChange(of: left == switchAt) { _, isSwitch in if isSwitch { buzz += 1 } }
                 .onChange(of: left == 0) { _, isZero in if isZero { next() } }
@@ -115,7 +115,7 @@ struct DrillsView: View {
                 Button("Start \(sides > 1 ? "\(seconds) s each side" : Dose.label(seconds))") {
                     timerEnds = .now.addingTimeInterval(TimeInterval(seconds * sides))
                 }
-                .buttonStyle(EmberButtonStyle())
+                .buttonStyle(AccentButtonStyle())
                 Button("Done") { next() }
                     .frame(width: 88, height: 52)
                     .overlay(Capsule().stroke(Theme.hairline))
@@ -126,7 +126,7 @@ struct DrillsView: View {
     private func row(_ i: Int, _ drill: PlannedExercise) -> some View {
         HStack(spacing: 12) {
             Image(systemName: i < index ? "checkmark.circle.fill" : (i == index ? "circle.inset.filled" : "circle"))
-                .foregroundStyle(i <= index ? Theme.ember : Theme.muted)
+                .foregroundStyle(i <= index ? Theme.accent : Theme.muted)
             Text(drill.name).font(.system(size: 15, weight: i == index ? .bold : .regular))
                 .foregroundStyle(i < index ? Theme.muted : Theme.text)
             Spacer()
@@ -148,7 +148,7 @@ struct DrillsView: View {
                 } label: {
                     HStack {
                         Image(systemName: rampDone.contains(i) ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(rampDone.contains(i) ? Theme.ember : Theme.muted)
+                            .foregroundStyle(rampDone.contains(i) ? Theme.accent : Theme.muted)
                         Text("\(unit.format(pounds: step.weight)) × \(step.reps)").font(Theme.mono(15))
                         Spacer()
                     }

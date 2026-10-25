@@ -21,7 +21,7 @@ struct ExerciseDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text(name.uppercased()).font(Theme.display(40))
+                Text(name.uppercased()).font(Theme.display(34))
                 if let ex = exercise, ex.photo != nil { photos(ex) }
                 if let guide {
                     Text(guide.summary).font(.system(size: 15)).foregroundStyle(Theme.text.opacity(0.9))
@@ -31,7 +31,7 @@ struct ExerciseDetailView: View {
                 if let ex = exercise { atAGlance(ex) }
                 // Personal first: the one thing on this page written for you.
                 if let cue = planned?.cue ?? relevantNote {
-                    callout("person.fill", "Your cue", cue, tint: Theme.emberWash)
+                    callout("person.fill", "Your cue", cue, tint: Theme.accentWash)
                 }
                 if let key = FormGuides.keyCue(for: name) {
                     callout("lightbulb.fill", "Remember", key, tint: Theme.surface)
@@ -60,7 +60,7 @@ struct ExerciseDetailView: View {
                     return Text(BodyArea.allCases.filter(ex.areas.contains).map(\.label).joined(separator: ", "))
                 }
                 let others = ex.secondary.isEmpty ? "" : " + " + ex.secondary.map(\.label).joined(separator: ", ")
-                return Text("\(Text(ex.primary.label).bold().foregroundStyle(Theme.ember))\(others)")
+                return Text("\(Text(ex.primary.label).bold().foregroundStyle(Theme.accent))\(others)")
             }
             glanceRow("Needs") {
                 Text(ex.equipment.isEmpty ? "Nothing, just you" : ex.equipment.map(\.label).sorted().joined(separator: ", "))
@@ -119,9 +119,9 @@ struct ExerciseDetailView: View {
 
     private func callout(_ icon: String, _ title: String, _ text: String, tint: Color) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: icon).foregroundStyle(Theme.emberSoft).frame(width: 20)
+            Image(systemName: icon).foregroundStyle(Theme.accentText).frame(width: 20)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title.uppercased()).font(Theme.label).tracking(1).foregroundStyle(Theme.emberSoft)
+                Text(title.uppercased()).font(Theme.label).tracking(1).foregroundStyle(Theme.accentText)
                 Text(text).font(.system(size: 15, weight: .medium)).fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -150,9 +150,9 @@ struct ExerciseDetailView: View {
         HStack(alignment: .top, spacing: 12) {
             Text(marker)
                 .font(Theme.mono(12))
-                .foregroundStyle(warning ? Theme.emberSoft : Theme.text)
+                .foregroundStyle(warning ? Theme.accentText : Theme.text)
                 .frame(width: 24, height: 24)
-                .background(warning ? Theme.emberWash : Theme.raised, in: Circle())
+                .background(warning ? Theme.accentWash : Theme.raised, in: Circle())
             Text(text).font(.system(size: 15)).fixedSize(horizontal: false, vertical: true)
         }
     }

@@ -24,11 +24,11 @@ struct GymsView: View {
                                 }
                                 Spacer()
                                 Image(systemName: gym == active ? "largecircle.fill.circle" : "circle")
-                                    .foregroundStyle(gym == active ? Theme.ember : Theme.muted)
+                                    .foregroundStyle(gym == active ? Theme.accent : Theme.muted)
                             }
                             .padding(.horizontal, 16).frame(minHeight: 60)
                             .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16))
-                            .overlay(RoundedRectangle(cornerRadius: 16).stroke(gym == active ? Theme.ember : Theme.hairline))
+                            .overlay(RoundedRectangle(cornerRadius: 16).stroke(gym == active ? Theme.accent : Theme.hairline))
                         }
                         .buttonStyle(.plain)
                         .accessibilityAddTraits(gym == active ? .isSelected : [])
@@ -50,9 +50,9 @@ struct GymsView: View {
                                         .font(.system(size: 14, weight: has ? .bold : .regular))
                                         .strikethrough(!has)
                                         .padding(.horizontal, 14).frame(height: 38)
-                                        .foregroundStyle(has ? Theme.emberSoft : Theme.muted)
-                                        .background(has ? Theme.emberWash : .clear, in: Capsule())
-                                        .overlay(Capsule().stroke(has ? Theme.ember : Theme.hairline,
+                                        .foregroundStyle(has ? Theme.accentText : Theme.muted)
+                                        .background(has ? Theme.accentWash : .clear, in: Capsule())
+                                        .overlay(Capsule().stroke(has ? Theme.accent : Theme.hairline,
                                                                   style: StrokeStyle(lineWidth: 1, dash: has ? [] : [4])))
                                 }
                                 .buttonStyle(.plain)

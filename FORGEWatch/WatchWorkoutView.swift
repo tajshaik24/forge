@@ -33,7 +33,7 @@ struct WatchWorkoutView: View {
         Group {
             if done {
                 VStack(spacing: 8) {
-                    Image(systemName: "checkmark.circle.fill").font(.largeTitle).foregroundStyle(Theme.ember)
+                    Image(systemName: "checkmark.circle.fill").font(.largeTitle).foregroundStyle(Theme.accent)
                     Text("Saved to Health").font(.headline)
                     Button("Done") { dismiss() }
                 }
@@ -73,7 +73,7 @@ struct WatchWorkoutView: View {
             }
             if let t = ex.target, t.weight > 0 {
                 Text("Target \(unit.format(pounds: t.weight)) × \(t.reps)")
-                    .font(.system(size: 11)).foregroundStyle(Theme.emberSoft)
+                    .font(.system(size: 11)).foregroundStyle(Theme.accentText)
             }
             HStack(spacing: 6) {
                 valueBox(weight.formatted(.number.precision(.fractionLength(0...1))), unit.label, .weight)
@@ -100,7 +100,7 @@ struct WatchWorkoutView: View {
             }
             .frame(maxWidth: .infinity, minHeight: 64)
             .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(editing == field ? Theme.ember : .clear, lineWidth: 2))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(editing == field ? Theme.accent : .clear, lineWidth: 2))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(value) \(unit). Turn the Digital Crown to change.")

@@ -69,9 +69,9 @@ struct CoachChatView: View {
         if m.fromUser {
             Text(m.text)
                 .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(Theme.onEmber)
+                .foregroundStyle(Theme.onAccent)
                 .padding(12)
-                .background(Theme.ember, in: UnevenRoundedRectangle(topLeadingRadius: 18, bottomLeadingRadius: 18, bottomTrailingRadius: 4, topTrailingRadius: 18))
+                .background(Theme.accent, in: UnevenRoundedRectangle(topLeadingRadius: 18, bottomLeadingRadius: 18, bottomTrailingRadius: 4, topTrailingRadius: 18))
                 .frame(maxWidth: 300, alignment: .trailing)
                 .frame(maxWidth: .infinity, alignment: .trailing)
         } else {
@@ -88,7 +88,7 @@ struct CoachChatView: View {
                                 HStack {
                                     if let r = ex.replaces {
                                         Text(r).strikethrough().foregroundStyle(Theme.muted)
-                                        Image(systemName: "arrow.right").foregroundStyle(Theme.emberSoft)
+                                        Image(systemName: "arrow.right").foregroundStyle(Theme.accentText)
                                     }
                                     Text(ex.name).bold()
                                 }
@@ -101,7 +101,7 @@ struct CoachChatView: View {
                 if let note = m.savedNote {
                     Label("Saved to notes: \(note)", systemImage: "checkmark")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Theme.emberSoft)
+                        .foregroundStyle(Theme.accentText)
                 }
             }
             .frame(maxWidth: 330, alignment: .leading)
@@ -134,8 +134,8 @@ struct CoachChatView: View {
                     .onSubmit { send(draft) }
                 Button { send(draft) } label: {
                     Image(systemName: "arrow.up").font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(Theme.onEmber)
-                        .frame(width: 46, height: 46).background(Theme.ember, in: Circle())
+                        .foregroundStyle(Theme.onAccent)
+                        .frame(width: 46, height: 46).background(Theme.accent, in: Circle())
                 }
                 .accessibilityLabel("Send")
                 .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty || coach.isThinking)
@@ -158,7 +158,7 @@ private struct StreamingBubble: View {
     @State private var cursorOn = true
 
     var body: some View {
-        Text("\(text)\(Text(" ▍").foregroundStyle(Theme.ember.opacity(cursorOn ? 1 : 0)))")
+        Text("\(text)\(Text(" ▍").foregroundStyle(Theme.accent.opacity(cursorOn ? 1 : 0)))")
             .font(.system(size: 15))
             .padding(12)
             .background(Theme.surface, in: UnevenRoundedRectangle(topLeadingRadius: 18, bottomLeadingRadius: 4, bottomTrailingRadius: 18, topTrailingRadius: 18))
@@ -191,7 +191,7 @@ struct StatusLine: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "flame.fill")
-                .foregroundStyle(Theme.ember)
+                .foregroundStyle(Theme.accent)
                 .symbolEffect(.pulse, options: .repeating)
             Text(phrases[index % phrases.count])
                 .font(.system(size: 14, weight: .medium))
@@ -230,7 +230,7 @@ struct CoachNotesView: View {
                 ForEach(notes) { note in
                     VStack(alignment: .leading, spacing: 4) {
                         Text("“\(note.said)”").font(.system(size: 15, weight: .semibold))
-                        Text(note.rule).font(.system(size: 13)).foregroundStyle(Theme.emberSoft)
+                        Text(note.rule).font(.system(size: 13)).foregroundStyle(Theme.accentText)
                         if !note.exercises.isEmpty {
                             Text("Only about: " + note.exercises.joined(separator: ", "))
                                 .font(.system(size: 12)).foregroundStyle(Theme.muted)

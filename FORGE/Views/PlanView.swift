@@ -23,7 +23,7 @@ struct PlanView: View {
                             Text(plan.date.formatted(.dateTime.weekday(.wide).month().day()).uppercased())
                                 .font(Theme.mono(12)).foregroundStyle(Theme.muted)
                         }
-                        Text(plan.focus.uppercased()).font(Theme.display(52))
+                        Text(plan.focus.uppercased()).font(Theme.display(44))
                         Text(plan.muscles.map(\.label).joined(separator: " · ")).foregroundStyle(Theme.muted)
                     }
                     FlowRow {
@@ -55,7 +55,7 @@ struct PlanView: View {
         .safeAreaInset(edge: .bottom) {
             if isToday, shown?.isRestDay == false {
                 Button("Start \(shown?.focus.lowercased() ?? "workout")") { training = true }
-                    .buttonStyle(EmberButtonStyle())
+                    .buttonStyle(AccentButtonStyle())
                     .padding(.horizontal, 20).padding(.vertical, 12)
                     .background(Theme.ground)
             }
@@ -102,13 +102,13 @@ struct ExerciseRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(exercise.name).font(.system(size: 16, weight: .bold))
                 if exercise.calibrate == true {
-                    Text("First Heat: initial benchmarking").font(.system(size: 12)).foregroundStyle(Theme.emberSoft)
+                    Text("First Heat: initial benchmarking").font(.system(size: 12)).foregroundStyle(Theme.accentText)
                 } else if let replaced = exercise.replaces {
-                    Text("Replaces \(replaced.lowercased())").font(.system(size: 12)).foregroundStyle(Theme.emberSoft)
+                    Text("Replaces \(replaced.lowercased())").font(.system(size: 12)).foregroundStyle(Theme.accentText)
                 } else if let note = exercise.target?.note {
-                    Text(note).font(.system(size: 12)).foregroundStyle(Theme.emberSoft).lineLimit(1)
+                    Text(note).font(.system(size: 12)).foregroundStyle(Theme.accentText).lineLimit(1)
                 } else if let cue = exercise.cue {
-                    Text(cue).font(.system(size: 12)).foregroundStyle(Theme.emberSoft).lineLimit(1)
+                    Text(cue).font(.system(size: 12)).foregroundStyle(Theme.accentText).lineLimit(1)
                 }
             }
             Spacer()

@@ -28,8 +28,8 @@ struct WeekView: View {
                                 Text(Calendar.current.veryShortWeekdaySymbols[wd - 1])
                                     .font(.system(size: 15, weight: on ? .heavy : .semibold))
                                     .frame(maxWidth: .infinity, minHeight: 44)
-                                    .foregroundStyle(on ? Theme.onEmber : Theme.muted)
-                                    .background(on ? Theme.ember : Theme.surface, in: RoundedRectangle(cornerRadius: 12))
+                                    .foregroundStyle(on ? Theme.onAccent : Theme.muted)
+                                    .background(on ? Theme.accent : Theme.surface, in: RoundedRectangle(cornerRadius: 12))
                             }
                             .accessibilityAddTraits(on ? .isSelected : [])
                         }
@@ -48,7 +48,7 @@ struct WeekView: View {
                     HStack {
                         SectionLabel("This week")
                         Spacer()
-                        if coach.isPlanningWeek { ProgressView().controlSize(.small).tint(Theme.ember) }
+                        if coach.isPlanningWeek { ProgressView().controlSize(.small).tint(Theme.accent) }
                     }
                     .padding(.bottom, 8)
                     ForEach(rows) { row in
@@ -71,7 +71,7 @@ struct WeekView: View {
                         let n = setsByMuscle[m] ?? 0
                         HStack {
                             Text(m.label).font(.system(size: 13)).frame(width: 90, alignment: .leading)
-                            ProgressView(value: min(n / 14, 1)).tint(Theme.ember)
+                            ProgressView(value: min(n / 14, 1)).tint(Theme.accent)
                             Text("\(Int(n))/14").font(Theme.mono(12, .medium)).foregroundStyle(Theme.muted)
                         }
                     }
@@ -97,13 +97,13 @@ struct WeekView: View {
                     .foregroundStyle(on ? Theme.text : Theme.text.opacity(0.85))
                 Text(style.detail)
                     .font(.system(size: 12))
-                    .foregroundStyle(on ? Theme.emberSoft : Theme.muted)
+                    .foregroundStyle(on ? Theme.accentText : Theme.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, minHeight: 76, alignment: .topLeading)
             .padding(12)
-            .background(on ? Theme.emberWash : Theme.surface, in: RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(on ? Theme.ember : Theme.hairline, lineWidth: on ? 2 : 1))
+            .background(on ? Theme.accentWash : Theme.surface, in: RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(on ? Theme.accent : Theme.hairline, lineWidth: on ? 2 : 1))
             .multilineTextAlignment(.leading)
         }
         .buttonStyle(.plain)
@@ -156,8 +156,8 @@ struct WeekView: View {
             Text(row.badge)
                 .font(.system(size: 11, weight: .bold))
                 .padding(.horizontal, 10).frame(height: 26)
-                .foregroundStyle(row.badge == "TODAY" ? Theme.onEmber : (row.badge == "ADJUSTED" ? Theme.emberSoft : Theme.muted))
-                .background(row.badge == "TODAY" ? Theme.ember : (row.badge == "ADJUSTED" ? Theme.emberWash : Theme.surface), in: Capsule())
+                .foregroundStyle(row.badge == "TODAY" ? Theme.onAccent : (row.badge == "ADJUSTED" ? Theme.accentText : Theme.muted))
+                .background(row.badge == "TODAY" ? Theme.accent : (row.badge == "ADJUSTED" ? Theme.accentWash : Theme.surface), in: Capsule())
         }
         .padding(.vertical, 10)
         .contentShape(Rectangle())

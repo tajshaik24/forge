@@ -12,7 +12,7 @@ struct FORGEWatchApp: App {
     var body: some Scene {
         WindowGroup {
             NavigationStack { WatchPlanView() }
-                .tint(Theme.ember)
+                .tint(Theme.accent)
         }
         .modelContainer(DataStore.shared)
     }
@@ -41,9 +41,9 @@ struct WatchPlanView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 6) {
-                Text("FORGE").font(.system(size: 13, weight: .heavy)).foregroundStyle(Theme.ember)
+                Text("FORGE").font(.system(size: 13, weight: .heavy)).foregroundStyle(Theme.accent)
                 if let plan = today {
-                    Text(plan.focus.uppercased()).font(Theme.display(32))
+                    Text(plan.focus.uppercased()).font(Theme.display(26))
                     Text("\(plan.exercises.count) moves · \(plan.minutes) min · \(plan.gymName)")
                         .font(.system(size: 12)).foregroundStyle(Theme.muted)
                     ForEach(plan.exercises) { ex in

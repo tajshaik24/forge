@@ -77,7 +77,7 @@ struct HistoryView: View {
             SectionLabel("Weekly volume (\(unit.rawValue))")
             Chart(weeklyVolume, id: \.week) { w in
                 BarMark(x: .value("Week", w.week, unit: .weekOfYear), y: .value("Volume", w.volume))
-                    .foregroundStyle(Calendar.current.isDate(w.week, equalTo: .now, toGranularity: .weekOfYear) ? Theme.ember : Theme.readiness(0.6))
+                    .foregroundStyle(Calendar.current.isDate(w.week, equalTo: .now, toGranularity: .weekOfYear) ? Theme.accent : Theme.readiness(0.6))
                     .cornerRadius(3)
             }
             .chartXAxis { AxisMarks(values: .stride(by: .weekOfYear, count: 2)) { _ in AxisValueLabel(format: .dateTime.month(.abbreviated).day()) } }
@@ -104,7 +104,7 @@ struct HistoryView: View {
                         }
                         Spacer()
                         if s.healthWorkoutID != nil {
-                            Image(systemName: "heart.fill").foregroundStyle(Theme.ember).accessibilityLabel("Saved to Health")
+                            Image(systemName: "heart.fill").foregroundStyle(Theme.accent).accessibilityLabel("Saved to Health")
                         }
                         Image(systemName: "chevron.right").font(.system(size: 12)).foregroundStyle(Theme.muted)
                     }
@@ -197,19 +197,19 @@ struct LiftProgressView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text(name.uppercased()).font(Theme.display(38))
+                Text(name.uppercased()).font(Theme.display(30))
                 if let first = points.first, let last = points.last, points.count > 1 {
                     let change = last.e1rm - first.e1rm
                     Text("\(change >= 0 ? "+" : "")\(Int(change)) \(unit.rawValue) estimated 1-rep max since \(first.day.formatted(.dateTime.month().day()))")
-                        .font(.system(size: 14)).foregroundStyle(change >= 0 ? Theme.emberSoft : Theme.muted)
+                        .font(.system(size: 14)).foregroundStyle(change >= 0 ? Theme.accentText : Theme.muted)
                 }
                 Card {
                     SectionLabel("Estimated 1-rep max (\(unit.rawValue))")
                     Chart(points) { p in
                         LineMark(x: .value("Date", p.day), y: .value("e1RM", p.e1rm))
-                            .foregroundStyle(Theme.ember)
+                            .foregroundStyle(Theme.accent)
                         PointMark(x: .value("Date", p.day), y: .value("e1RM", p.e1rm))
-                            .foregroundStyle(Theme.ember)
+                            .foregroundStyle(Theme.accent)
                     }
                     .chartYScale(domain: .automatic(includesZero: false))
                     .frame(height: 180)

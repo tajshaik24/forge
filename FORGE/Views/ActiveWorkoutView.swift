@@ -162,7 +162,7 @@ struct ActiveWorkoutView: View {
                 HStack(alignment: .top) {
                     Button { sheet = .form } label: {
                         HStack(spacing: 8) {
-                            Text(ex.name.uppercased()).font(Theme.display(38)).multilineTextAlignment(.leading)
+                            Text(ex.name.uppercased()).font(Theme.display(30)).multilineTextAlignment(.leading)
                             Text("Form").font(.system(size: 12, weight: .semibold))
                                 .padding(.horizontal, 10).padding(.vertical, 5)
                                 .overlay(Capsule().stroke(Theme.hairline))
@@ -188,7 +188,7 @@ struct ActiveWorkoutView: View {
                           ? "Target \(unit.format(pounds: target.weight)) × \(target.reps)\(timed ? " s" : "") · \(target.note)"
                           : "Target \(target.reps) \(timed ? "s" : "reps") · \(target.note)",
                           systemImage: "scope")
-                        .font(.system(size: 13)).foregroundStyle(Theme.emberSoft)
+                        .font(.system(size: 13)).foregroundStyle(Theme.accentText)
                 } else if timed {
                     Text("First time: hold for \(ex.reps), stopping while your form is still good.")
                         .font(.system(size: 13)).foregroundStyle(Theme.muted)
@@ -218,7 +218,7 @@ struct ActiveWorkoutView: View {
                     Picker("RPE", selection: $rpe) { ForEach(6...10, id: \.self) { Text("\($0)") } }
                         .pickerStyle(.segmented)
                     Text("10 = nothing left · 8 = two reps left").font(.system(size: 11)).foregroundStyle(Theme.muted)
-                    Button(ex.calibrate == true && calibration(ex, logged(ex.name)) == nil ? "Log test set" : "Log set \(setNumber)") { logSet(ex, plan) }.buttonStyle(EmberButtonStyle())
+                    Button(ex.calibrate == true && calibration(ex, logged(ex.name)) == nil ? "Log test set" : "Log set \(setNumber)") { logSet(ex, plan) }.buttonStyle(AccentButtonStyle())
                 }
 
                 loggedList(ex)
@@ -240,7 +240,7 @@ struct ActiveWorkoutView: View {
                     if tracker.isStartingOnWatch {
                         Label("Starting on Watch…", systemImage: "applewatch")
                     } else if tracker.isMirrored {
-                        Image(systemName: "applewatch").foregroundStyle(Theme.ember)
+                        Image(systemName: "applewatch").foregroundStyle(Theme.accent)
                             .accessibilityLabel("Shared with Apple Watch")
                     }
                     Text(elapsed).monospacedDigit()
@@ -263,8 +263,8 @@ struct ActiveWorkoutView: View {
                 Text(n <= done ? "DONE" : (n == done + 1 ? "NOW" : "SET \(n)"))
                     .font(.system(size: 11, weight: .bold))
                     .frame(maxWidth: .infinity, minHeight: 36)
-                    .foregroundStyle(n == done + 1 ? Theme.onEmber : Theme.muted)
-                    .background(n == done + 1 ? Theme.ember : Theme.surface, in: RoundedRectangle(cornerRadius: 10))
+                    .foregroundStyle(n == done + 1 ? Theme.onAccent : Theme.muted)
+                    .background(n == done + 1 ? Theme.accent : Theme.surface, in: RoundedRectangle(cornerRadius: 10))
             }
         }
     }
@@ -473,7 +473,7 @@ struct RestPanel: View {
                             .overlay(Capsule().stroke(Theme.hairline))
                         Button("Next set", action: done)
                             .font(.system(size: 15, weight: .heavy))
-                            .foregroundStyle(Theme.onEmber)
+                            .foregroundStyle(Theme.onAccent)
                             .frame(maxWidth: .infinity, minHeight: 48)
                             .background(Theme.text, in: Capsule())
                     }
@@ -631,7 +631,7 @@ struct CalibrationCard: View {
                     .font(.system(size: 14)).fixedSize(horizontal: false, vertical: true)
                 Label("Working sets: \(unit.format(pounds: result.working.weight)) × \(exercise.reps) reps",
                       systemImage: "scope")
-                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.emberSoft)
+                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.accentText)
                 Text(RepScheme.summary(for: goal)).font(.system(size: 12)).foregroundStyle(Theme.muted)
             } else {
                 SectionLabel("First Heat · set \(tests.count + 1)")

@@ -1,30 +1,49 @@
 import SwiftUI
 
-/// FORGE look: dark iron ground, one ember accent, condensed display type.
+/// FORGE look ("Chalk"): chalk-white ground and ink type in light mode, chalk on slate in dark,
+/// one cobalt accent, expanded display type. The Watch always uses the dark values.
 enum Theme {
-    static let ground = Color(red: 0.055, green: 0.059, blue: 0.067)       // #0E0F11
-    static let surface = Color(red: 0.102, green: 0.110, blue: 0.122)      // #1A1C1F
-    static let raised = Color(red: 0.149, green: 0.161, blue: 0.180)       // #26292E
-    static let hairline = Color(red: 0.165, green: 0.176, blue: 0.196)     // #2A2D32
-    static let text = Color(red: 0.949, green: 0.941, blue: 0.922)         // #F2F0EB
-    static let muted = Color(red: 0.639, green: 0.655, blue: 0.682)        // #A3A7AE
-    static let ember = Color(red: 1.0, green: 0.420, blue: 0.173)          // #FF6B2C
-    static let emberSoft = Color(red: 1.0, green: 0.690, blue: 0.514)      // #FFB083
-    static let emberWash = Color(red: 0.133, green: 0.094, blue: 0.059)    // #22180F
-    static let onEmber = Color(red: 0.067, green: 0.071, blue: 0.078)      // #111214
+    static let ground = Color(light: 0xF4F2EC, dark: 0x101318)
+    static let surface = Color(light: 0xFFFFFF, dark: 0x191D24)
+    static let raised = Color(light: 0xE3DFD5, dark: 0x242933)
+    static let hairline = Color(light: 0xDCD8CE, dark: 0x2C323C)
+    static let text = Color(light: 0x16171A, dark: 0xF4F2EC)
+    static let muted = Color(light: 0x5E6066, dark: 0x9EA4AF)
+    static let accent = Color(light: 0x2443C9, dark: 0x4A68F2)
+    static let accentText = Color(light: 0x2443C9, dark: 0x9DB0FF)   // accent-coloured copy on ground/surface
+    static let accentWash = Color(light: 0xE6EAFB, dark: 0x172038)
+    static let onAccent = Color(light: 0xFFFFFF, dark: 0xFFFFFF)
 
-    static func display(_ size: CGFloat) -> Font { Font.system(size: size, weight: .black).width(.compressed) }
+    static func display(_ size: CGFloat) -> Font { Font.system(size: size, weight: .heavy).width(.expanded) }
     static func mono(_ size: CGFloat, _ weight: Font.Weight = .semibold) -> Font { .system(size: size, weight: weight, design: .monospaced) }
     static let label = Font.system(size: 12, weight: .bold)
 
-    /// Recovered muscles glow brighter; fatigued ones go dark (single-hue so it reads without color vision).
+    /// Recovered muscles are the strongest cobalt; fatigued ones recede into the ground
+    /// (single-hue, stepped by lightness, so it reads without color vision).
     static func readiness(_ value: Double) -> Color {
         switch value {
-        case 0.85...: Color(red: 1.0, green: 0.541, blue: 0.298)
-        case 0.7..<0.85: Color(red: 0.878, green: 0.459, blue: 0.208)
-        case 0.55..<0.7: Color(red: 0.710, green: 0.396, blue: 0.180)
-        default: Color(red: 0.541, green: 0.306, blue: 0.165)
+        case 0.85...: Color(light: 0x2443C9, dark: 0xA3B4FF)
+        case 0.7..<0.85: Color(light: 0x4C66D4, dark: 0x7089F5)
+        case 0.55..<0.7: Color(light: 0x7F92DF, dark: 0x4A5FC4)
+        default: Color(light: 0xAEBAEA, dark: 0x34428A)
         }
+    }
+}
+
+private extension Color {
+    init(hex: UInt32) {
+        self.init(red: Double(hex >> 16 & 0xFF) / 255, green: Double(hex >> 8 & 0xFF) / 255, blue: Double(hex & 0xFF) / 255)
+    }
+
+    /// Resolves per appearance on iOS; watchOS has no light mode, so it takes the dark value.
+    init(light: UInt32, dark: UInt32) {
+        #if os(watchOS)
+        self.init(hex: dark)
+        #else
+        self.init(uiColor: UIColor { traits in
+            UIColor(Color(hex: traits.userInterfaceStyle == .dark ? dark : light))
+        })
+        #endif
     }
 }
 
@@ -47,13 +66,13 @@ struct Card<Content: View>: View {
     }
 }
 
-struct EmberButtonStyle: ButtonStyle {
+struct AccentButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 17, weight: .heavy))
-            .foregroundStyle(Theme.onEmber)
+            .foregroundStyle(Theme.onAccent)
             .frame(maxWidth: .infinity, minHeight: 54)
-            .background(Theme.ember.opacity(configuration.isPressed ? 0.8 : 1), in: Capsule())
+            .background(Theme.accent.opacity(configuration.isPressed ? 0.8 : 1), in: Capsule())
     }
 }
 
@@ -62,9 +81,9 @@ struct NoteChip: View {
     var body: some View {
         Label(text, systemImage: "exclamationmark.circle")
             .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(Theme.emberSoft)
+            .foregroundStyle(Theme.accentText)
             .padding(.horizontal, 10).padding(.vertical, 6)
-            .background(Theme.emberWash, in: Capsule())
-            .overlay(Capsule().stroke(Theme.ember.opacity(0.35)))
+            .background(Theme.accentWash, in: Capsule())
+            .overlay(Capsule().stroke(Theme.accent.opacity(0.35)))
     }
 }

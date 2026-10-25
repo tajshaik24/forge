@@ -61,7 +61,7 @@ struct CrewView: View {
 
     private var startOrJoin: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("START A CREW").font(Theme.display(40))
+            Text("START A CREW").font(Theme.display(34))
             Text("A small group that keeps each other showing up. Hit your training days every week to keep the streak alive. Rest days never break it.")
                 .font(.system(size: 15)).foregroundStyle(Theme.muted)
             TextField("Crew name", text: $newCrewName)
@@ -76,7 +76,7 @@ struct CrewView: View {
                 crew.displayName = name.trimmingCharacters(in: .whitespaces)
                 Task { await crew.createCrew(named: newCrewName.trimmingCharacters(in: .whitespaces)) }
             }
-            .buttonStyle(EmberButtonStyle())
+            .buttonStyle(AccentButtonStyle())
             .disabled(newCrewName.trimmingCharacters(in: .whitespaces).isEmpty || name.trimmingCharacters(in: .whitespaces).isEmpty || crew.isLoading)
             Text("Got an invite? Tap the link on this iPhone and you'll join automatically.")
                 .font(.system(size: 13)).foregroundStyle(Theme.muted)
@@ -85,7 +85,7 @@ struct CrewView: View {
 
     private var namePrompt: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("YOU'RE IN").font(Theme.display(40))
+            Text("YOU'RE IN").font(Theme.display(34))
             Text("What should \(crew.crew?.name ?? "your crew") call you?").foregroundStyle(Theme.muted)
             TextField("Your name", text: $name)
                 .padding(14).background(Theme.surface, in: RoundedRectangle(cornerRadius: 14))
@@ -97,7 +97,7 @@ struct CrewView: View {
                     await sync()
                 }
             }
-            .buttonStyle(EmberButtonStyle())
+            .buttonStyle(AccentButtonStyle())
             .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
         }
     }
@@ -116,7 +116,7 @@ struct CrewView: View {
             Card {
                 HStack(spacing: 16) {
                     VStack(spacing: 0) {
-                        Text("\(crew.crewStreak)").font(Theme.mono(44)).foregroundStyle(Theme.emberSoft)
+                        Text("\(crew.crewStreak)").font(Theme.mono(44)).foregroundStyle(Theme.accentText)
                         Text("weeks").font(.system(size: 11)).foregroundStyle(Theme.muted)
                     }
                     .frame(width: 76)
@@ -132,9 +132,9 @@ struct CrewView: View {
 
             ForEach(crew.nudgesForMe.prefix(1)) { n in
                 Label("\(n.fromName) nudged you · \(n.date.formatted(.relative(presentation: .named)))", systemImage: "bell")
-                    .font(.system(size: 13)).foregroundStyle(Theme.emberSoft)
+                    .font(.system(size: 13)).foregroundStyle(Theme.accentText)
                     .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Theme.emberWash, in: RoundedRectangle(cornerRadius: 14))
+                    .background(Theme.accentWash, in: RoundedRectangle(cornerRadius: 14))
             }
 
             HStack {
@@ -153,7 +153,7 @@ struct CrewView: View {
                 ShareLink(item: url, subject: Text("Join my FORGE crew")) {
                     Label("Invite your crew", systemImage: "person.badge.plus")
                 }
-                .buttonStyle(EmberButtonStyle())
+                .buttonStyle(AccentButtonStyle())
             }
 
             SectionLabel("Activity")
@@ -178,20 +178,20 @@ struct CrewView: View {
                                                         to: CrewStreaks.calendar.startOfDay(for: .now)).day ?? 0
         return HStack(spacing: 10) {
             Text(String(s.member.name.prefix(1)).uppercased())
-                .font(.system(size: 13, weight: .heavy)).foregroundStyle(Theme.onEmber)
-                .frame(width: 34, height: 34).background(isMe ? Theme.ember : Theme.emberSoft, in: Circle())
+                .font(.system(size: 13, weight: .heavy)).foregroundStyle(Theme.onAccent)
+                .frame(width: 34, height: 34).background(isMe ? Theme.accent : Theme.accentText, in: Circle())
             VStack(alignment: .leading, spacing: 3) {
                 Text(isMe ? "You" : s.member.name).font(.system(size: 15, weight: .bold))
                 Text(s.atRisk ? "At risk · needs \(s.needed) in \(s.daysLeft) days"
                      : (s.metGoal ? "Week done · \(s.weekStreak)-week streak" : "\(s.count) of \(s.member.weeklyGoal) · \(s.weekStreak)-week streak"))
                     .font(.system(size: 12, weight: s.atRisk ? .semibold : .regular))
-                    .foregroundStyle(s.atRisk ? Theme.emberSoft : Theme.muted)
+                    .foregroundStyle(s.atRisk ? Theme.accentText : Theme.muted)
             }
             Spacer(minLength: 4)
             HStack(spacing: 4) {
                 ForEach(0..<7, id: \.self) { i in
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(s.daysThisWeek.contains(i) ? Theme.ember : (i > today ? Color.clear : Theme.surface))
+                        .fill(s.daysThisWeek.contains(i) ? Theme.accent : (i > today ? Color.clear : Theme.surface))
                         .overlay(RoundedRectangle(cornerRadius: 4)
                             .stroke(s.daysThisWeek.contains(i) ? .clear : Theme.hairline,
                                     style: StrokeStyle(lineWidth: 1, dash: i > today ? [3] : [])))
@@ -206,9 +206,9 @@ struct CrewView: View {
                         Task { await crew.nudge(s.member) }
                     }
                     .font(.system(size: 13, weight: .heavy))
-                    .foregroundStyle(nudged.contains(s.member.id) ? Theme.emberSoft : Theme.onEmber)
+                    .foregroundStyle(nudged.contains(s.member.id) ? Theme.accentText : Theme.onAccent)
                     .padding(.horizontal, 12).frame(height: 32)
-                    .background(nudged.contains(s.member.id) ? Color.clear : Theme.ember, in: Capsule())
+                    .background(nudged.contains(s.member.id) ? Color.clear : Theme.accent, in: Capsule())
                     .disabled(nudged.contains(s.member.id))
                 } else {
                     Text("\(s.count)/\(s.member.weeklyGoal)").font(Theme.mono(14))
@@ -217,8 +217,8 @@ struct CrewView: View {
             .frame(width: 64, alignment: .trailing)
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
-        .background(s.atRisk ? Theme.emberWash : Theme.surface, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(s.atRisk ? Theme.ember.opacity(0.4) : Theme.hairline))
+        .background(s.atRisk ? Theme.accentWash : Theme.surface, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(s.atRisk ? Theme.accent.opacity(0.4) : Theme.hairline))
     }
 }
 
@@ -229,7 +229,7 @@ struct CrewCard: View {
     var body: some View {
         NavigationLink { CrewView() } label: {
             HStack(spacing: 14) {
-                Image(systemName: "person.3.fill").foregroundStyle(Theme.ember)
+                Image(systemName: "person.3.fill").foregroundStyle(Theme.accent)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(crew.crew?.name ?? "Start a crew").font(.system(size: 15, weight: .bold))
                     if crew.crew != nil, let me = crew.standings.first(where: { $0.member.id == crew.myUserID }) {

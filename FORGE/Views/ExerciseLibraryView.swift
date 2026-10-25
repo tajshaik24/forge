@@ -157,7 +157,7 @@ struct CustomExerciseEditor: View {
             Form {
                 Section {
                     TextField("Name", text: $name)
-                    if nameTaken { Text("There's already an exercise with this name.").font(.footnote).foregroundStyle(Theme.emberSoft) }
+                    if nameTaken { Text("There's already an exercise with this name.").font(.footnote).foregroundStyle(Theme.accentText) }
                     Picker("Main muscle", selection: $primary) {
                         ForEach(MuscleGroup.allCases, id: \.self) { Text($0.label).tag($0) }
                     }
@@ -203,9 +203,9 @@ struct CustomExerciseEditor: View {
                 } label: {
                     Text(label(item)).font(.system(size: 13, weight: on ? .bold : .regular))
                         .padding(.horizontal, 12).frame(height: 32)
-                        .foregroundStyle(on ? Theme.emberSoft : Theme.muted)
-                        .background(on ? Theme.emberWash : .clear, in: Capsule())
-                        .overlay(Capsule().stroke(on ? Theme.ember : Theme.hairline))
+                        .foregroundStyle(on ? Theme.accentText : Theme.muted)
+                        .background(on ? Theme.accentWash : .clear, in: Capsule())
+                        .overlay(Capsule().stroke(on ? Theme.accent : Theme.hairline))
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(on ? .isSelected : [])

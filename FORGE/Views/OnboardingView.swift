@@ -25,7 +25,7 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(spacing: 6) {
                 ForEach(0..<stepCount, id: \.self) { i in
-                    Capsule().fill(i <= step ? Theme.ember : Theme.raised).frame(height: 4)
+                    Capsule().fill(i <= step ? Theme.accent : Theme.raised).frame(height: 4)
                 }
             }
             .accessibilityLabel("Step \(step + 1) of \(stepCount)")
@@ -52,7 +52,7 @@ struct OnboardingView: View {
                 Button(step == stepCount - 1 ? "Build my first workout" : "Continue") {
                     if step == stepCount - 1 { Task { await finish() } } else { withAnimation { step += 1 } }
                 }
-                .buttonStyle(EmberButtonStyle())
+                .buttonStyle(AccentButtonStyle())
                 .disabled(step == 2 && days.isEmpty)
             }
         }
@@ -65,7 +65,7 @@ struct OnboardingView: View {
 
     private func title(_ text: String, _ sub: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(text.uppercased()).font(Theme.display(40))
+            Text(text.uppercased()).font(Theme.display(34))
             Text(sub).font(.system(size: 15)).foregroundStyle(Theme.muted)
         }
     }
@@ -79,11 +79,11 @@ struct OnboardingView: View {
                 }
                 Spacer()
                 Image(systemName: selected ? "largecircle.fill.circle" : "circle")
-                    .foregroundStyle(selected ? Theme.ember : Theme.muted)
+                    .foregroundStyle(selected ? Theme.accent : Theme.muted)
             }
             .padding(.horizontal, 16).frame(minHeight: 60)
             .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(selected ? Theme.ember : Theme.hairline))
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(selected ? Theme.accent : Theme.hairline))
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
@@ -117,8 +117,8 @@ struct OnboardingView: View {
                         Text(Calendar.current.veryShortWeekdaySymbols[wd - 1])
                             .font(.system(size: 15, weight: on ? .heavy : .semibold))
                             .frame(maxWidth: .infinity, minHeight: 48)
-                            .foregroundStyle(on ? Theme.onEmber : Theme.muted)
-                            .background(on ? Theme.ember : Theme.surface, in: RoundedRectangle(cornerRadius: 12))
+                            .foregroundStyle(on ? Theme.onAccent : Theme.muted)
+                            .background(on ? Theme.accent : Theme.surface, in: RoundedRectangle(cornerRadius: 12))
                     }
                     .accessibilityLabel(Calendar.current.weekdaySymbols[wd - 1])
                     .accessibilityAddTraits(on ? .isSelected : [])

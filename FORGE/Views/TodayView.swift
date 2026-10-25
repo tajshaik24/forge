@@ -26,10 +26,10 @@ struct TodayView: View {
                 // Right under the day it acts on.
                 if isTodaySelected, let plan = coach.plan, !plan.isRestDay {
                     NavigationLink { PlanView() } label: { Text("Start workout") }
-                        .buttonStyle(EmberButtonStyle())
+                        .buttonStyle(AccentButtonStyle())
                 } else if !isTodaySelected, selectedDone == nil, let plan = selectedPlan, !plan.isRestDay {
                     NavigationLink { PlanView(day: plan) } label: { Text("View plan") }
-                        .buttonStyle(EmberButtonStyle())
+                        .buttonStyle(AccentButtonStyle())
                 }
                 if SyncedSettings.crewBeta { CrewCard() }
                 readiness
@@ -65,11 +65,11 @@ struct TodayView: View {
             NavigationLink { SummaryView(session: done) } label: {
                 Card {
                     HStack {
-                        Text("DONE · \(dayLabel)").font(Theme.mono(11)).foregroundStyle(Theme.emberSoft)
+                        Text("DONE · \(dayLabel)").font(Theme.mono(11)).foregroundStyle(Theme.accentText)
                         Spacer()
                         Image(systemName: "chevron.right").foregroundStyle(Theme.muted)
                     }
-                    Text(done.focus.uppercased()).font(Theme.display(52))
+                    Text(done.focus.uppercased()).font(Theme.display(44))
                     Text("\(done.orderedSets.count) sets · \(done.gymName)").font(Theme.mono(13)).foregroundStyle(Theme.muted)
                 }
             }
@@ -77,16 +77,16 @@ struct TodayView: View {
         } else if let plan = selectedPlan {
             pickCard(plan)
         } else if isTodaySelected {
-            Card { ProgressView("Your coach is planning today…").tint(Theme.ember) }
+            Card { ProgressView("Your coach is planning today…").tint(Theme.accent) }
         } else {
             Card {
                 HStack {
                     Text("\(isPastSelected ? "NOTHING LOGGED" : "NOT PLANNED YET") · \(dayLabel)")
-                        .font(Theme.mono(11)).foregroundStyle(Theme.emberSoft)
+                        .font(Theme.mono(11)).foregroundStyle(Theme.accentText)
                     Spacer()
                     if !isPastSelected { DayActionsMenu(date: selected, plan: nil) }
                 }
-                Text(isPastSelected ? "REST" : "OPEN DAY").font(Theme.display(52))
+                Text(isPastSelected ? "REST" : "OPEN DAY").font(Theme.display(44))
                 if !isPastSelected {
                     Text(coach.isPlanningWeek ? "Your coach is planning the week…" : "Use ⋯ to train this day.")
                         .font(.system(size: 14)).foregroundStyle(Theme.muted)
@@ -103,7 +103,7 @@ struct TodayView: View {
     private var liveCard: some View {
         Button { showLive = true } label: {
             HStack(spacing: 12) {
-                Image(systemName: "applewatch.radiowaves.left.and.right").font(.title2).foregroundStyle(Theme.ember)
+                Image(systemName: "applewatch.radiowaves.left.and.right").font(.title2).foregroundStyle(Theme.accent)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Live on Apple Watch").font(.system(size: 15, weight: .heavy))
                     Text("Tap to log sets here too").font(.footnote).foregroundStyle(Theme.muted)
@@ -122,7 +122,7 @@ struct TodayView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(Date.now.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()).uppercased())
                     .font(Theme.mono(12)).foregroundStyle(Theme.muted)
-                Text("FORGE").font(Theme.display(28)).tracking(1.5)
+                Text("FORGE").font(Theme.display(24)).tracking(1.5)
             }
             Spacer()
             Menu {
@@ -155,14 +155,14 @@ struct TodayView: View {
         Card {
             HStack {
                 Text(plan.isRestDay ? "REST DAY · \(dayLabel)" : (isTodaySelected ? "COACH PICK" : "PLANNED · \(dayLabel)"))
-                    .font(Theme.mono(11)).foregroundStyle(Theme.emberSoft)
+                    .font(Theme.mono(11)).foregroundStyle(Theme.accentText)
                 Spacer()
                 Label(plan.engine, systemImage: plan.engine == "AI Coach" ? "sparkles" : "gearshape")
                     .font(.system(size: 11)).foregroundStyle(Theme.muted)
                 if !isPastSelected { DayActionsMenu(date: selected, plan: plan) }
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(plan.focus.uppercased()).font(Theme.display(64))
+                Text(plan.focus.uppercased()).font(Theme.display(52))
                 if !plan.muscles.isEmpty {
                     Text(plan.muscles.map(\.label).joined(separator: " · ")).foregroundStyle(Theme.text.opacity(0.85))
                 }
@@ -177,11 +177,11 @@ struct TodayView: View {
             SectionLabel(isTodaySelected ? "Why today" : "Why this day")
             ForEach(plan.reasons, id: \.self) { reason in
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Circle().fill(Theme.ember).frame(width: 7, height: 7)
+                    Circle().fill(Theme.accent).frame(width: 7, height: 7)
                     Text(reason).font(.system(size: 14))
                 }
             }
-            if coach.isThinking { ProgressView().tint(Theme.ember) }
+            if coach.isThinking { ProgressView().tint(Theme.accent) }
         }
     }
 
@@ -234,10 +234,10 @@ struct WeekStrip: View {
                         Text(label.uppercased()).font(.system(size: 9, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
                     }
                     .frame(maxWidth: .infinity).padding(.vertical, 8)
-                    .foregroundStyle(isSelected ? Theme.onEmber : (done != nil || planned ? Theme.text : Theme.muted))
-                    .background(isSelected ? Theme.ember : (done != nil ? Theme.surface : .clear),
+                    .foregroundStyle(isSelected ? Theme.onAccent : (done != nil || planned ? Theme.text : Theme.muted))
+                    .background(isSelected ? Theme.accent : (done != nil ? Theme.surface : .clear),
                                 in: RoundedRectangle(cornerRadius: 14))
-                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(isToday && !isSelected ? Theme.ember : .clear, lineWidth: 1.5))
+                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(isToday && !isSelected ? Theme.accent : .clear, lineWidth: 1.5))
                     .contentShape(RoundedRectangle(cornerRadius: 14))
                 }
                 .buttonStyle(.plain)

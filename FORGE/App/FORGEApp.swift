@@ -14,8 +14,7 @@ struct FORGEApp: App {
         WindowGroup {
             RootView()
                 .environment(coach)
-                .preferredColorScheme(.dark)
-                .tint(Theme.ember)
+                .tint(Theme.accent)
         }
         .modelContainer(DataStore.shared)
     }

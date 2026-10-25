@@ -21,7 +21,7 @@ struct SummaryView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("\(session.date.formatted(.dateTime.weekday().month().day())) · \(session.gymName)".uppercased())
                         .font(Theme.mono(12)).foregroundStyle(Theme.muted)
-                    Text("\(session.focus.uppercased()) DONE").font(Theme.display(44))
+                    Text("\(session.focus.uppercased()) DONE").font(Theme.display(36))
                 }
 
                 Label(session.healthWorkoutID != nil
@@ -49,7 +49,7 @@ struct SummaryView: View {
                         }
                         Chart(Array(session.heartRates.enumerated()), id: \.offset) { i, bpm in
                             BarMark(x: .value("Time", Double(i) * 15 / 60), y: .value("BPM", bpm))
-                                .foregroundStyle(bpm >= 145 ? Theme.ember : (bpm >= 125 ? Theme.readiness(0.6) : Theme.readiness(0.3)))
+                                .foregroundStyle(bpm >= 145 ? Theme.accent : (bpm >= 125 ? Theme.readiness(0.6) : Theme.readiness(0.3)))
                         }
                         .chartXAxisLabel("minutes")
                         .frame(height: 90)
@@ -87,7 +87,7 @@ struct SummaryView: View {
         }
         .background(Theme.ground)
         .safeAreaInset(edge: .bottom) {
-            Button("Done", action: onDone).buttonStyle(EmberButtonStyle()).padding(20)
+            Button("Done", action: onDone).buttonStyle(AccentButtonStyle()).padding(20)
         }
         .sheet(item: $editing) { EditSetSheet(entry: $0, unit: unit) }
         // How it felt shapes the rest of the week's plans.
