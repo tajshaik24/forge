@@ -1,0 +1,58 @@
+/* Mirrors Shared/Theme.swift. Light by default; the renderer adds .dark to <html>. */
+:root {
+  --ground: #F4F2EC; --surface: #FFFFFF; --raised: #E3DFD5; --hairline: #DCD8CE;
+  --text: #16171A; --muted: #5E6066; --accent: #2443C9; --accent-text: #2443C9;
+  --wash: #E6EAFB; --on: #FFFFFF;
+  --r1: #2443C9; --r2: #4C66D4; --r3: #7F92DF; --r4: #AEBAEA;
+}
+.dark {
+  --ground: #101318; --surface: #191D24; --raised: #242933; --hairline: #2C323C;
+  --text: #F4F2EC; --muted: #9EA4AF; --accent: #4A68F2; --accent-text: #9DB0FF;
+  --wash: #172038; --on: #FFFFFF;
+  --r1: #A3B4FF; --r2: #7089F5; --r3: #4A5FC4; --r4: #34428A;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; width: 390px; height: 844px; overflow: hidden; position: relative;
+  background: var(--ground); color: var(--text);
+  font-family: -apple-system, system-ui, sans-serif; font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+.display { margin: 0; font-weight: 800; font-stretch: 125%; text-transform: uppercase; line-height: 0.98; }
+.title { margin: 0; font-weight: 800; font-stretch: 125%; font-size: 28px; }
+.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+.label { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.muted { color: var(--muted); }
+.accent { color: var(--accent-text); }
+.screen { padding: 56px 20px 0; display: flex; flex-direction: column; }
+.row { display: flex; align-items: center; }
+.between { display: flex; align-items: center; justify-content: space-between; }
+.card { background: var(--surface); border: 1px solid var(--hairline); border-radius: 20px; padding: 16px; }
+.btn {
+  display: flex; align-items: center; justify-content: center; height: 54px; border-radius: 999px;
+  background: var(--accent); color: var(--on); font-weight: 800; font-size: 17px;
+}
+.btn.ghost { background: var(--surface); color: var(--text); border: 1px solid var(--hairline); }
+.btn.inverse { background: var(--text); color: var(--ground); }
+.pill {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--hairline); font-size: 13px; font-weight: 600;
+}
+.note {
+  display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px;
+  background: var(--wash); color: var(--accent-text); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  font-size: 13px; font-weight: 600;
+}
+.seg { display: flex; padding: 4px; border-radius: 16px; background: var(--surface); border: 1px solid var(--hairline); }
+.seg > div { flex: 1; text-align: center; padding: 11px 0; border-radius: 12px; font-weight: 600; color: var(--muted); }
+.seg > .on { background: var(--text); color: var(--ground); font-weight: 700; }
+.list > div { border-top: 1px solid var(--hairline); }
+.list > div:last-child { border-bottom: 1px solid var(--hairline); }
+.tabbar {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 92px; padding-top: 10px;
+  display: flex; justify-content: space-around; border-top: 1px solid var(--hairline); background: var(--ground);
+}
+.tabbar > div { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 72px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.tabbar > .on { color: var(--accent); font-weight: 700; }
+.bottom { position: absolute; left: 20px; right: 20px; bottom: 34px; }
+svg.i { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }

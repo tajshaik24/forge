@@ -1,0 +1,47 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="theme.css">
+<style>
+.td { display: grid; grid-template-columns: repeat(7, 1fr); gap: 7px; margin-top: 10px; }
+.td > div { height: 46px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; background: var(--surface); border: 1px solid var(--hairline); color: var(--muted); }
+.td > .on { background: var(--accent); border-color: var(--accent); color: var(--on); }
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.split > div { height: 44px; border-radius: 14px; display: flex; align-items: center; justify-content: center; background: var(--surface); border: 1px solid var(--hairline); font-weight: 600; font-size: 15px; }
+.split > .on { background: var(--text); color: var(--ground); border-color: var(--text); font-weight: 700; }
+.d { display: flex; align-items: center; gap: 16px; padding: 10px 0; }
+.d .mono { width: 34px; font-size: 14px; color: var(--muted); }
+.d .f { flex: 1; }
+.d .f b { font-weight: 800; font-stretch: 125%; font-size: 15px; }
+.d .f small { display: block; font-size: 13px; color: var(--muted); margin-top: 2px; }
+.tag { padding: 6px 12px; border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: .08em; border: 1px solid var(--hairline); color: var(--muted); }
+.tag.today { background: var(--accent); color: var(--on); border-color: var(--accent); }
+.tag.adj { background: var(--wash); color: var(--accent-text); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+.sv { display: flex; align-items: center; gap: 12px; margin-top: 8px; font-size: 15px; }
+.sv span:first-child { width: 96px; }
+.sv .t { flex: 1; height: 8px; border-radius: 4px; background: var(--raised); overflow: hidden; }
+.sv .t i { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
+.sv .mono { width: 44px; text-align: right; font-size: 14px; color: var(--muted); }
+</style></head><body>
+<div class="screen" style="padding-top:56px">
+  <div class="title">Your week</div>
+  <div class="label" style="margin-top:14px">Training days · tap to change</div>
+  <div class="td"><div class="on">M</div><div class="on">T</div><div>W</div><div class="on">T</div><div>F</div><div class="on">S</div><div>S</div></div>
+  <div class="label" style="margin-top:16px">Split</div>
+  <div class="split"><div class="on">Coach decides</div><div>Push · Pull · Legs</div><div>Upper · Lower</div><div>Full body</div></div>
+  <div class="muted" style="font-size:14px;line-height:1.35;margin-top:10px">Coach decides: picks each day from muscle readiness, your notes and the gym you are at.</div>
+  <div class="list" style="margin-top:12px">
+    <div class="d"><span class="mono">MON</span><div class="f"><b>PUSH</b><small>Chest · Shoulders · Triceps</small></div><span class="tag">DONE</span></div>
+    <div class="d"><span class="mono">TUE</span><div class="f"><b>LEGS</b><small>Felt lightheaded on squats</small></div><span class="tag">DONE</span></div>
+    <div class="d"><span class="mono">THU</span><div class="f"><b>PULL</b><small>Back · Biceps · Rear delts</small></div><span class="tag today">TODAY</span></div>
+    <div class="d"><span class="mono">SAT</span><div class="f"><b>LEGS</b><small>Supported moves only</small></div><span class="tag adj">ADJUSTED</span></div>
+  </div>
+  <div class="between" style="margin-top:16px"><span class="label">Weekly sets vs target</span><span class="muted" style="font-size:13px">done / planned</span></div>
+  <div class="sv"><span>Chest</span><div class="t"><i style="width:75%"></i></div><span class="mono">9/12</span></div>
+  <div class="sv"><span>Back</span><div class="t"><i style="width:0%"></i></div><span class="mono">0/14</span></div>
+  <div class="sv"><span>Quads</span><div class="t"><i style="width:50%"></i></div><span class="mono">7/14</span></div>
+</div>
+<div class="tabbar">
+  <div><svg class="i" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Today</div>
+  <div><svg class="i" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Coach</div>
+  <div class="on"><svg class="i" viewBox="0 0 24 24"><path d="M6 20v-6M12 20V5M18 20v-9"/></svg>Week</div>
+  <div><svg class="i" viewBox="0 0 24 24"><path d="M6 7v10M3 9.5v5M18 7v10M21 9.5v5M6 12h12"/></svg>Gyms</div>
+</div>
+</body></html>

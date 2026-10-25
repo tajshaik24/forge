@@ -1,0 +1,44 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="theme.css">
+<style>
+.sets { display: flex; gap: 8px; margin-top: 18px; }
+.set { flex: 1; height: 50px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 11px; font-weight: 700; letter-spacing: .06em; }
+.set .mono { font-size: 13px; font-weight: 500; letter-spacing: 0; }
+.set.done { background: var(--surface); border: 1px solid var(--hairline); }
+.set.now { background: var(--accent); color: var(--on); }
+.set.next { border: 1.5px dashed var(--muted); color: var(--muted); }
+.stepper { display: flex; align-items: center; justify-content: space-between; padding: 0 18px; height: 92px; margin-top: 12px; }
+.round { width: 52px; height: 52px; border-radius: 26px; background: var(--raised); display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 300; }
+.big { display: flex; flex-direction: column; align-items: center; }
+.big .mono { font-size: 46px; font-weight: 600; line-height: 1; }
+.rpe { display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px; margin-top: 10px; }
+.rpe > div { height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: var(--surface); border: 1px solid var(--hairline); font-weight: 600; font-size: 15px; }
+.rpe > .on { background: var(--text); color: var(--ground); border-color: var(--text); }
+</style></head><body>
+<div class="screen" style="padding-top:60px">
+  <div class="between">
+    <svg class="i" viewBox="0 0 24 24" style="stroke-width:2.4"><path d="M6 9l6 6 6-6"/></svg>
+    <div class="mono muted" style="font-size:14px">12:48&nbsp;&nbsp;<span style="color:var(--accent)">♥</span> <span style="color:var(--text)">128</span>&nbsp;&nbsp;1 OF 6</div>
+    <span class="accent" style="font-weight:700;font-size:16px">Finish</span>
+  </div>
+  <div class="row" style="gap:10px;margin-top:30px">
+    <div class="display" style="font-size:30px">LEG PRESS</div>
+    <span class="pill">Form</span>
+  </div>
+  <div class="accent" style="font-size:14px;margin-top:8px;line-height:1.3">Target 270 lb × 8 · +10 lb — you hit 12 on every set last time</div>
+  <div class="sets">
+    <div class="set done">SET 1<span class="mono">270×10</span></div>
+    <div class="set now">SET 2<span class="mono">NOW</span></div>
+    <div class="set next">SET 3<span class="mono">—</span></div>
+    <div class="set next">SET 4<span class="mono">—</span></div>
+  </div>
+  <div class="card stepper" style="margin-top:18px"><div class="round">−</div><div class="big"><span class="mono">270</span><span class="label" style="margin-top:4px">lb</span></div><div class="round">+</div></div>
+  <div class="card stepper"><div class="round">−</div><div class="big"><span class="mono">10</span><span class="label" style="margin-top:4px">reps</span></div><div class="round">+</div></div>
+  <div class="label" style="margin-top:20px">How hard? (RPE)</div>
+  <div class="rpe"><div>6</div><div>7</div><div class="on">8</div><div>9</div><div>10</div></div>
+  <div class="btn" style="margin-top:14px;height:56px;font-size:18px">Log set 2</div>
+</div>
+<div class="card between bottom" style="padding:14px 16px">
+  <div><div class="label" style="font-size:11px">Up next</div><div style="font-weight:700;font-size:16px;margin-top:3px">Romanian deadlift · 3 × 10</div></div>
+  <span class="pill" style="height:40px;padding:0 16px;font-size:15px">Swap</span>
+</div>
+</body></html>

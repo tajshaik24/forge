@@ -1,0 +1,61 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="theme.css">
+<style>
+.days { display: flex; gap: 6px; margin-top: 18px; }
+.day { flex: 1; height: 66px; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: var(--muted); }
+.day b { font-size: 11px; } .day .n { font-size: 17px; font-weight: 600; } .day i { font-style: normal; font-size: 9px; font-weight: 800; letter-spacing: .04em; }
+.day.done { background: var(--surface); border: 1px solid var(--hairline); color: var(--text); }
+.day.today { background: var(--accent); color: var(--on); }
+.day.plan { border: 1.5px dashed var(--muted); color: var(--text); }
+.why { display: flex; gap: 12px; align-items: baseline; font-size: 14px; line-height: 1.3; margin-top: 7px; }
+.dot { flex-shrink: 0; width: 8px; height: 8px; border-radius: 4px; transform: translateY(-1px); }
+.bars { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 26px; margin-top: 8px; }
+.track { height: 8px; border-radius: 4px; background: var(--raised); margin-top: 6px; overflow: hidden; }
+.track > div { height: 100%; border-radius: 4px; }
+</style></head><body>
+<div class="screen" style="padding-top:44px">
+  <div class="between" style="align-items:flex-end">
+    <div><div class="mono muted" style="font-size:13px;letter-spacing:.1em">THU · OCT 8</div>
+      <div class="display" style="font-size:24px;letter-spacing:1.5px;margin-top:6px">FORGE</div></div>
+    <div class="pill" style="height:48px;padding:0 16px;font-size:16px;gap:8px">
+      <svg class="i" viewBox="0 0 24 24" style="color:var(--accent);width:20px"><path d="M6 7v10M3 9.5v5M18 7v10M21 9.5v5M6 12h12"/></svg>Home gym
+      <svg class="i" viewBox="0 0 24 24" style="width:13px;stroke-width:2.6"><path d="M6 9l6 6 6-6"/></svg></div>
+  </div>
+  <div class="days" style="margin-top:14px">
+    <div class="day done"><b>M</b><span class="n mono">5</span><i>PUSH</i></div>
+    <div class="day done"><b>T</b><span class="n mono">6</span><i>LEGS</i></div>
+    <div class="day"><b>W</b><span class="n mono">7</span><i>REST</i></div>
+    <div class="day today"><b>T</b><span class="n mono">8</span><i>PULL</i></div>
+    <div class="day"><b>F</b><span class="n mono">9</span><i>REST</i></div>
+    <div class="day plan"><b>S</b><span class="n mono">10</span><i>LEGS</i></div>
+    <div class="day"><b>S</b><span class="n mono">11</span><i>REST</i></div>
+  </div>
+  <div class="card" style="margin-top:14px;padding:18px">
+    <div class="between"><span class="mono accent" style="font-size:12px;letter-spacing:.1em">COACH PICK · DAY 3 OF 4</span><span class="muted" style="font-size:13px">AI Coach</span></div>
+    <div class="display" style="font-size:52px;margin-top:14px">PULL</div>
+    <div style="font-size:19px;margin-top:8px">Back · Biceps · Rear delts</div>
+    <div class="mono muted" style="font-size:15px;margin-top:12px;word-spacing:4px">45 MIN&nbsp; 6 MOVES&nbsp; 17 SETS</div>
+    <div style="height:1px;background:var(--hairline);margin:12px 0 10px"></div>
+    <div class="label">Why today</div>
+    <div class="why"><span class="dot" style="background:var(--r1)"></span>Back last trained 4 days ago — fully recovered.</div>
+    <div class="why"><span class="dot" style="background:var(--r3)"></span>Legs still recovering from Tuesday, so not today.</div>
+    <div class="why"><span class="dot" style="background:var(--muted)"></span>Slept 6h 12m and HRV is under your baseline: volume trimmed 15%.</div>
+  </div>
+  <div class="between" style="margin-top:16px"><span class="label">Muscle readiness</span><span class="muted" style="font-size:13px">from logs + sleep</span></div>
+  <div class="bars">
+    <div><div class="between"><span>Back</span><span class="mono muted">96%</span></div><div class="track"><div style="width:96%;background:var(--r1)"></div></div></div>
+    <div><div class="between"><span>Shoulders</span><span class="mono muted">78%</span></div><div class="track"><div style="width:78%;background:var(--r2)"></div></div></div>
+    <div><div class="between"><span>Chest</span><span class="mono muted">64%</span></div><div class="track"><div style="width:64%;background:var(--r3)"></div></div></div>
+    <div><div class="between"><span>Quads</span><span class="mono muted">41%</span></div><div class="track"><div style="width:41%;background:var(--r4)"></div></div></div>
+  </div>
+</div>
+<div class="row" style="position:absolute;left:20px;right:20px;bottom:110px;gap:12px">
+  <div class="btn" style="flex:1;height:56px;font-size:18px">Start workout</div>
+  <div class="btn ghost" style="width:56px;height:56px"><svg class="i" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/></svg></div>
+</div>
+<div class="tabbar">
+  <div class="on"><svg class="i" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Today</div>
+  <div><svg class="i" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Coach</div>
+  <div><svg class="i" viewBox="0 0 24 24"><path d="M6 20v-6M12 20V5M18 20v-9"/></svg>Week</div>
+  <div><svg class="i" viewBox="0 0 24 24"><path d="M6 7v10M3 9.5v5M18 7v10M21 9.5v5M6 12h12"/></svg>Gyms</div>
+</div>
+</body></html>

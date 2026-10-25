@@ -11,21 +11,21 @@ sets a weight target for every lift, and saves every workout to Apple Health.
 
 ![iOS 26+](https://img.shields.io/badge/iOS-26%2B-111214?logo=apple&logoColor=white)
 ![watchOS 26+](https://img.shields.io/badge/watchOS-26%2B-111214?logo=apple&logoColor=white)
-![Swift](https://img.shields.io/badge/Swift-SwiftUI%20%C2%B7%20SwiftData-FF6B2C?logo=swift&logoColor=white)
-![AI](https://img.shields.io/badge/AI-Foundation%20Models%20(on--device)-FF6B2C)
+![Swift](https://img.shields.io/badge/Swift-SwiftUI%20%C2%B7%20SwiftData-2443C9?logo=swift&logoColor=white)
+![AI](https://img.shields.io/badge/AI-Foundation%20Models%20(on--device)-2443C9)
 ![Status](https://img.shields.io/badge/status-pre--alpha-555)
 
 </div>
 
 <p align="center">
-  <img src="docs/screenshots/today.png" width="19%" alt="Today: coach pick">
-  <img src="docs/screenshots/coach.png" width="19%" alt="AI Coach chat">
-  <img src="docs/screenshots/plan.png" width="19%" alt="Adapted plan">
-  <img src="docs/screenshots/active-set.png" width="19%" alt="Logging a set">
-  <img src="docs/screenshots/crew.png" width="19%" alt="Crew streaks">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/today-dark.png"><img src="docs/screenshots/today.png" width="19%" alt="Today: coach pick"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/coach-dark.png"><img src="docs/screenshots/coach.png" width="19%" alt="AI Coach chat"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/plan-dark.png"><img src="docs/screenshots/plan.png" width="19%" alt="Adapted plan"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/active-set-dark.png"><img src="docs/screenshots/active-set.png" width="19%" alt="Logging a set"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/crew-dark.png"><img src="docs/screenshots/crew.png" width="19%" alt="Crew streaks"></picture>
 </p>
 
-<p align="center"><sub>Design mockups. The SwiftUI app follows the same layout and theme.</sub></p>
+<p align="center"><sub>Design mockups, shown in light or dark to match your GitHub theme. The SwiftUI app follows the same layout and theme.</sub></p>
 
 ---
 
@@ -62,15 +62,16 @@ sets a weight target for every lift, and saves every workout to Apple Health.
 | **Crews (beta)** | Weekly streaks with friends over CloudKit sharing. No server. Crews see check-ins only. |
 | **Siri + Shortcuts** | *"What's today's workout in FORGE"* · *"Log a set in FORGE"* |
 | **Syncs everywhere** | SwiftData + CloudKit across iPhone, iPad and Watch. Settings sync through iCloud key-value storage. |
+| **Light and dark** | Follows the system appearance: ink on chalk white by day, chalk on slate at night, one cobalt accent. The Watch stays dark. |
 
 <details>
 <summary><b>More screens</b></summary>
 <br>
 <p align="center">
-  <img src="docs/screenshots/form-guide.png" width="24%" alt="Form guide">
-  <img src="docs/screenshots/summary.png" width="24%" alt="Workout summary">
-  <img src="docs/screenshots/history.png" width="24%" alt="History and progress">
-  <img src="docs/screenshots/week.png" width="24%" alt="Week planning">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/form-guide-dark.png"><img src="docs/screenshots/form-guide.png" width="24%" alt="Form guide"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/summary-dark.png"><img src="docs/screenshots/summary.png" width="24%" alt="Workout summary"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/history-dark.png"><img src="docs/screenshots/history.png" width="24%" alt="History and progress"></picture>
+  <picture><source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/week-dark.png"><img src="docs/screenshots/week.png" width="24%" alt="Week planning"></picture>
 </p>
 <p align="center">
   <img src="docs/screenshots/watch.png" width="208" alt="Apple Watch set logging">
@@ -163,8 +164,19 @@ Turn on **Settings → Crews (beta)**. Crews run on CloudKit, so the first crew 
 
 ### Regenerating the app icon
 
+The icon is a barbell seen side-on: ink plates on a cobalt bar over chalk white. The script writes the default, dark (transparent background) and tinted variants for iPhone, plus the Watch icon, using the same colors as `Shared/Theme.swift`. It needs Pillow (`pip3 install pillow`).
+
 ```sh
 python3 tools/make_icon.py FORGE/Assets.xcassets/AppIcon.appiconset FORGEWatch/Assets.xcassets/AppIcon.appiconset
+```
+
+### Regenerating the README screenshots
+
+The screenshots are HTML mockups in `docs/mockups/` that use the app's palette (`theme.css` mirrors `Shared/Theme.swift`). Each phone screen renders in light and dark. The renderer uses WebKit, so text appears in SF Pro and SF Mono, the same fonts as the app.
+
+```sh
+pip3 install playwright && python3 -m playwright install webkit
+python3 tools/render_mockups.py
 ```
 
 ### Updating exercise photos
@@ -218,8 +230,8 @@ Shared/           code built into both apps: models, catalog, form guides,
                   progression, HealthKit workout tracker + mirroring,
                   Watch link, theme
 FORGETests/       Swift Testing suite
-docs/             icon, screenshots, device guide, scope docs, gameplan
-tools/            icon generator, exercise photo importer
+docs/             icon, screenshots + their HTML mockups, device guide, scope docs, gameplan
+tools/            icon generator, screenshot renderer, exercise photo importer
 project.yml       XcodeGen spec
 ```
 

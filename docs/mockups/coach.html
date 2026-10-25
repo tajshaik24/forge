@@ -1,0 +1,42 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="theme.css">
+<style>
+.me { align-self: flex-end; max-width: 300px; background: var(--accent); color: var(--on); padding: 10px 14px; border-radius: 20px 20px 6px 20px; font-size: 15px; line-height: 1.35; }
+.bot { max-width: 340px; padding: 12px 14px; font-size: 15px; line-height: 1.38; border-radius: 20px 20px 20px 6px; }
+.chg { margin-top: 8px; font-size: 15px; }
+.chg s { color: var(--muted); }
+.chg .arrow { color: var(--accent-text); margin: 0 6px; }
+.chg small { display: block; color: var(--muted); font-size: 12px; margin-top: 1px; }
+.chips { display: flex; gap: 8px; overflow: hidden; white-space: nowrap; }
+.chips > div { flex-shrink: 0; padding: 9px 14px; border-radius: 999px; background: var(--surface); border: 1px solid var(--hairline); font-size: 14px; }
+</style></head><body>
+<div class="between" style="padding:52px 20px 12px;border-bottom:1px solid var(--hairline)">
+  <div class="title">AI Coach</div>
+  <div class="pill" style="height:44px;padding:0 16px;font-size:15px"><svg class="i" viewBox="0 0 24 24" style="width:18px;color:var(--accent)"><path d="M7 3h7l4 4v14H7z"/><path d="M10 11h5M10 15h5"/></svg>Notes · 4</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px;padding:12px 20px">
+  <div class="me">Squats make me lightheaded. Can you work around that for Saturday's leg day?</div>
+  <div class="card bot">Got it. I'll keep heavy standing barbell work out of leg day and use supported movements instead, with longer rest and a cue to stand up slowly. If it happens outside the gym too, mention it to your doctor.</div>
+  <div class="card" style="max-width:350px;padding:12px 14px">
+    <div class="between"><span class="label">Sat · Legs · Equinox</span><span class="mono accent" style="font-size:11px;letter-spacing:.06em">3 CHANGES</span></div>
+    <div class="chg"><s>Back squat</s><span class="arrow">→</span><b>Leg press</b><small>Seated, back supported — no bar on your spine.</small></div>
+    <div class="chg"><s>Walking lunge</s><span class="arrow">→</span><b>Split squat</b><small>Hand on the bench for balance; fixed position.</small></div>
+    <div class="chg"><s>90s rest</s><span class="arrow">→</span><b>2:30 rest</b><small>Plus a reminder to breathe out and stand slowly.</small></div>
+    <div class="row" style="gap:8px;margin-top:12px"><div class="btn" style="flex:1;height:42px;font-size:15px">Apply to Saturday</div><div class="btn ghost" style="width:96px;height:42px;font-size:15px">Preview</div></div>
+  </div>
+  <div class="note" style="align-self:flex-start">✓ Saved to notes: no heavy standing squats</div>
+</div>
+<div style="position:absolute;left:0;right:0;bottom:92px;padding:10px 0 10px 16px;border-top:1px solid var(--hairline)">
+  <div class="chips"><div>Only 30 min today</div><div>I'm at a hotel gym</div><div>Shoulder feels tight</div></div>
+  <div class="row" style="gap:8px;margin-top:8px;padding-right:16px">
+    <div class="muted" style="flex:1;height:48px;border-radius:24px;background:var(--surface);border:1px solid var(--hairline);display:flex;align-items:center;padding:0 16px;font-size:16px">Tell your coach anything…</div>
+    <div class="btn ghost" style="width:48px;height:48px"><svg class="i" viewBox="0 0 24 24" style="width:20px"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></div>
+    <div class="btn" style="width:48px;height:48px"><svg class="i" viewBox="0 0 24 24" style="width:20px;stroke-width:2.4"><path d="M12 19V5M6 11l6-6 6 6"/></svg></div>
+  </div>
+</div>
+<div class="tabbar">
+  <div><svg class="i" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Today</div>
+  <div class="on"><svg class="i" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Coach</div>
+  <div><svg class="i" viewBox="0 0 24 24"><path d="M6 20v-6M12 20V5M18 20v-9"/></svg>Week</div>
+  <div><svg class="i" viewBox="0 0 24 24"><path d="M6 7v10M3 9.5v5M18 7v10M21 9.5v5M6 12h12"/></svg>Gyms</div>
+</div>
+</body></html>

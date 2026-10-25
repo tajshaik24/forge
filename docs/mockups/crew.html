@@ -1,0 +1,44 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="theme.css">
+<style>
+.m { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+.av { width: 36px; height: 36px; border-radius: 18px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 15px; flex-shrink: 0; }
+.who { width: 100px; flex-shrink: 0; }
+.who b { display: block; font-size: 16px; }
+.who span { font-size: 12px; color: var(--muted); line-height: 1.25; display: block; margin-top: 2px; }
+.wk { display: flex; gap: 3px; flex: 1; }
+.wk i { width: 15px; height: 15px; border-radius: 4px; }
+.wk .d { background: var(--accent); }
+.wk .x { background: var(--raised); }
+.wk .f { border: 1.5px dashed var(--hairline); }
+.score { width: 34px; text-align: right; font-weight: 700; font-size: 16px; }
+.act { display: flex; gap: 10px; padding: 9px 0; font-size: 14px; align-items: baseline; }
+.act b { width: 44px; }
+.act span { flex: 1; color: var(--muted); }
+</style></head><body>
+<div class="screen" style="padding-top:60px">
+  <div class="between">
+    <svg class="i" viewBox="0 0 24 24" style="stroke-width:2.4"><path d="M15 5l-7 7 7 7"/></svg>
+    <span class="pill mono" style="font-weight:500">BETA</span>
+    <span class="accent" style="font-weight:700;font-size:16px">+ Invite</span>
+  </div>
+  <div class="label" style="margin-top:18px">Your crew</div>
+  <div class="display" style="font-size:34px;margin-top:6px">DAWN PATROL</div>
+  <div class="card row" style="gap:18px;margin-top:12px;padding:12px 18px">
+    <div style="text-align:center"><div class="mono accent" style="font-size:44px;font-weight:600;line-height:1">6</div><div class="muted" style="font-size:12px;margin-top:2px">weeks</div></div>
+    <div><div style="font-weight:800;font-size:17px">Crew streak</div><div class="muted" style="font-size:14px;line-height:1.35;margin-top:3px">Everyone hit their training days 6 weeks running. 3 of 4 on track this week.</div></div>
+  </div>
+  <div class="note between" style="border-radius:16px;padding:11px 14px;margin-top:10px;font-size:14px;display:flex">🔔&nbsp; Priya nudged you · 1 day left this week <span style="margin-left:auto">✕</span></div>
+  <div class="row" style="margin-top:14px"><span class="label" style="width:172px">This week</span><span class="mono muted" style="font-size:10px;letter-spacing:11.6px">MTWTFSS</span></div>
+  <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
+    <div class="card m"><div class="av" style="background:var(--accent);color:var(--on)">T</div><div class="who"><b>You</b><span>3 of 4 · 7-week streak</span></div><div class="wk"><i class="d"></i><i class="d"></i><i class="x"></i><i class="d"></i><i class="f"></i><i class="f"></i><i class="f"></i></div><div class="score mono">3/4</div></div>
+    <div class="card m"><div class="av" style="background:#E9C46A;color:#16171A">P</div><div class="who"><b>Priya</b><span>Week done · 11-week streak</span></div><div class="wk"><i class="d"></i><i class="x"></i><i class="d"></i><i class="d"></i><i class="f"></i><i class="d"></i><i class="f"></i></div><div class="score mono">4/4</div></div>
+    <div class="card m" style="background:var(--wash);border-color:color-mix(in srgb,var(--accent) 35%,transparent)"><div class="av" style="background:#8EC5E8;color:#16171A">M</div><div class="who"><b>Marcus</b><span class="accent" style="font-weight:700">At risk · needs 2 in 3 days</span></div><div class="wk"><i class="x"></i><i class="d"></i><i class="x"></i><i class="x"></i><i class="f"></i><i class="f"></i><i class="f"></i></div><div class="btn" style="height:30px;padding:0 9px;font-size:12px;flex-shrink:0">Nudge</div></div>
+    <div class="card m"><div class="av" style="background:#C3B1E1;color:#16171A">S</div><div class="who"><b>Sam</b><span>2 of 3 · 4-week streak</span></div><div class="wk"><i class="x"></i><i class="d"></i><i class="x"></i><i class="d"></i><i class="f"></i><i class="f"></i><i class="f"></i></div><div class="score mono">2/3</div></div>
+  </div>
+  <div class="label" style="margin-top:14px">Activity</div>
+  <div class="list" style="margin-top:6px">
+    <div class="act"><b>Priya</b><span>Legs · 19 sets · 52 min · Health verified</span><small class="muted">2h</small></div>
+    <div class="act"><b>You</b><span>Pull · 17 sets · 46 min · new best on pull-up</span><small class="muted">5h</small></div>
+  </div>
+</div>
+</body></html>
