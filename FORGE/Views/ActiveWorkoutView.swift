@@ -5,6 +5,7 @@ struct ActiveWorkoutView: View {
     @Environment(\.modelContext) private var ctx
     @Environment(\.dismiss) private var dismiss
     @Environment(CoachStore.self) private var coach
+    @Environment(\.hinge) private var hinge
     private let tracker = WorkoutTracker.shared
 
     @Query private var todaysSets: [SetEntry]
@@ -154,76 +155,117 @@ struct ActiveWorkoutView: View {
                      nextUp: nextUp, onWatch: tracker.isMirrored)
     }
 
+    /// One scrolling column on a regular iPhone. On iPhone Duo, propped half-open, what you read sits above
+    /// the fold and what you tap below it; opened flat, the form guide fills the other side.
+    @ViewBuilder
     private func training(_ ex: PlannedExercise, _ plan: PlannedWorkout) -> some View {
+        switch hinge {
+        case .partlyOpen:
+            FoldSplit {
+                ScrollView { readout(ex, plan).padding(20) }
+            } second: {
+                ScrollView { controls(ex, plan).padding(20) }
+            } single: {
+                column(ex, plan)
+            }
+        case .open:
+            FoldSplit {
+                column(ex, plan)
+            } second: {
+                NavigationStack { ExerciseDetailView(name: ex.name, planned: ex) }.id(ex.name)
+            } single: {
+                column(ex, plan)
+            }
+        default:
+            column(ex, plan)
+        }
+    }
+
+    private func column(_ ex: PlannedExercise, _ plan: PlannedWorkout) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                header(plan)
-
-                HStack(alignment: .top) {
-                    Button { sheet = .form } label: {
-                        HStack(spacing: 8) {
-                            Text(ex.name.uppercased()).font(Theme.display(30)).multilineTextAlignment(.leading)
-                            Text("Form").font(.system(size: 12, weight: .semibold))
-                                .padding(.horizontal, 10).padding(.vertical, 5)
-                                .overlay(Capsule().stroke(Theme.hairline))
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    Spacer()
-                    Menu {
-                        Button("Swap exercise", systemImage: "arrow.triangle.2.circlepath") { sheet = .swap }
-                        Button("Add exercise after this", systemImage: "plus") { sheet = .add }
-                        Button("Skip to next", systemImage: "forward") { next() }
-                    } label: {
-                        Image(systemName: "ellipsis.circle").font(.system(size: 22)).frame(width: 44, height: 44)
-                    }
-                    .accessibilityLabel("Exercise options")
-                }
-
-                if ex.calibrate == true {
-                    CalibrationCard(exercise: ex, tests: logged(ex.name), result: calibration(ex, logged(ex.name)),
-                                    goal: goal, unit: unit)
-                } else if let target = ex.target {
-                    Label(target.weight > 0
-                          ? "Target \(unit.format(pounds: target.weight)) × \(target.reps)\(timed ? " s" : "") · \(target.note)"
-                          : "Target \(target.reps) \(timed ? "s" : "reps") · \(target.note)",
-                          systemImage: "scope")
-                        .font(.system(size: 13)).foregroundStyle(Theme.accentText)
-                } else if timed {
-                    Text("First time: hold for \(ex.reps), stopping while your form is still good.")
-                        .font(.system(size: 13)).foregroundStyle(Theme.muted)
-                } else {
-                    Text("First time: pick a weight you could do for \(ex.reps) reps with 2 left in the tank.")
-                        .font(.system(size: 13)).foregroundStyle(Theme.muted)
-                }
-                if let cue = ex.cue { NoteChip(text: cue) }
-
-                setStrip(ex)
-
-                if let restUntil {
-                    RestPanel(until: restUntil,
-                              cue: plan.restSeconds > 90 ? "Breathe out as you press. Sit for 10 s before standing." : nil,
-                              done: { endRest() },
-                              extend: extendRest)
-                } else {
-                    Stepper(value: $weight, in: 0...1000, step: unit.step) {
-                        valueLabel(weight.formatted(.number.precision(.fractionLength(0...1))), unit.label)
-                    }
-                    if timed {
-                        Stepper(value: $reps, in: 5...300, step: 5) { valueLabel("\(reps)", "SECONDS") }
-                    } else {
-                        Stepper(value: $reps, in: 1...50) { valueLabel("\(reps)", "REPS") }
-                    }
-                    SectionLabel("How hard? (RPE)")
-                    Picker("RPE", selection: $rpe) { ForEach(6...10, id: \.self) { Text("\($0)") } }
-                        .pickerStyle(.segmented)
-                    Text("10 = nothing left · 8 = two reps left").font(.system(size: 11)).foregroundStyle(Theme.muted)
-                    Button(ex.calibrate == true && calibration(ex, logged(ex.name)) == nil ? "Log test set" : "Log set \(setNumber)") { logSet(ex, plan) }.buttonStyle(AccentButtonStyle())
-                }
-
-                loggedList(ex)
+                readout(ex, plan)
+                controls(ex, plan)
             }
             .padding(20)
+        }
+    }
+
+    /// The exercise, its target, where you are in it, and the rest timer.
+    private func readout(_ ex: PlannedExercise, _ plan: PlannedWorkout) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            header(plan)
+
+            HStack(alignment: .top) {
+                Button { sheet = .form } label: {
+                    HStack(spacing: 8) {
+                        Text(ex.name.uppercased()).font(Theme.display(30)).multilineTextAlignment(.leading)
+                        Text("Form").font(.system(size: 12, weight: .semibold))
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .overlay(Capsule().stroke(Theme.hairline))
+                    }
+                }
+                .buttonStyle(.plain)
+                Spacer()
+                Menu {
+                    Button("Swap exercise", systemImage: "arrow.triangle.2.circlepath") { sheet = .swap }
+                    Button("Add exercise after this", systemImage: "plus") { sheet = .add }
+                    Button("Skip to next", systemImage: "forward") { next() }
+                } label: {
+                    Image(systemName: "ellipsis.circle").font(.system(size: 22)).frame(width: 44, height: 44)
+                }
+                .accessibilityLabel("Exercise options")
+            }
+
+            if ex.calibrate == true {
+                CalibrationCard(exercise: ex, tests: logged(ex.name), result: calibration(ex, logged(ex.name)),
+                                goal: goal, unit: unit)
+            } else if let target = ex.target {
+                Label(target.weight > 0
+                      ? "Target \(unit.format(pounds: target.weight)) × \(target.reps)\(timed ? " s" : "") · \(target.note)"
+                      : "Target \(target.reps) \(timed ? "s" : "reps") · \(target.note)",
+                      systemImage: "scope")
+                    .font(.system(size: 13)).foregroundStyle(Theme.accentText)
+            } else if timed {
+                Text("First time: hold for \(ex.reps), stopping while your form is still good.")
+                    .font(.system(size: 13)).foregroundStyle(Theme.muted)
+            } else {
+                Text("First time: pick a weight you could do for \(ex.reps) reps with 2 left in the tank.")
+                    .font(.system(size: 13)).foregroundStyle(Theme.muted)
+            }
+            if let cue = ex.cue { NoteChip(text: cue) }
+
+            setStrip(ex)
+
+            if let restUntil {
+                RestPanel(until: restUntil,
+                          cue: plan.restSeconds > 90 ? "Breathe out as you press. Sit for 10 s before standing." : nil,
+                          done: { endRest() },
+                          extend: extendRest)
+            }
+        }
+    }
+
+    /// Weight, reps and effort for the next set, then the sets logged so far.
+    private func controls(_ ex: PlannedExercise, _ plan: PlannedWorkout) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if restUntil == nil {
+                Stepper(value: $weight, in: 0...1000, step: unit.step) {
+                    valueLabel(weight.formatted(.number.precision(.fractionLength(0...1))), unit.label)
+                }
+                if timed {
+                    Stepper(value: $reps, in: 5...300, step: 5) { valueLabel("\(reps)", "SECONDS") }
+                } else {
+                    Stepper(value: $reps, in: 1...50) { valueLabel("\(reps)", "REPS") }
+                }
+                SectionLabel("How hard? (RPE)")
+                Picker("RPE", selection: $rpe) { ForEach(6...10, id: \.self) { Text("\($0)") } }
+                    .pickerStyle(.segmented)
+                Text("10 = nothing left · 8 = two reps left").font(.system(size: 11)).foregroundStyle(Theme.muted)
+                Button(ex.calibrate == true && calibration(ex, logged(ex.name)) == nil ? "Log test set" : "Log set \(setNumber)") { logSet(ex, plan) }.buttonStyle(AccentButtonStyle())
+            }
+
+            loggedList(ex)
         }
     }
 

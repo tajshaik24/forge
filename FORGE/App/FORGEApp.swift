@@ -15,6 +15,7 @@ struct FORGEApp: App {
             RootView()
                 .environment(coach)
                 .tint(Theme.accent)
+                .readsHinge()
         }
         .modelContainer(DataStore.shared)
     }
