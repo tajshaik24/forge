@@ -33,6 +33,22 @@ final class WorkoutSession {
     var duration: TimeInterval { (endDate ?? .now).timeIntervalSince(date) }
     var volume: Double { orderedSets.reduce(0) { $0 + $1.weight * Double($1.reps) } }
 
+    /// Weeks in a row with a finished workout that has sets. An empty current week doesn't break it yet.
+    static func weekStreak(_ sessions: [WorkoutSession], now: Date = .now) -> Int {
+        let cal = Calendar.current
+        let weeks = Set(sessions.filter { $0.endDate != nil && !($0.sets ?? []).isEmpty }
+            .compactMap { cal.dateInterval(of: .weekOfYear, for: $0.date)?.start })
+        guard let thisWeek = cal.dateInterval(of: .weekOfYear, for: now)?.start,
+              var week = weeks.contains(thisWeek) ? thisWeek : cal.date(byAdding: .weekOfYear, value: -1, to: thisWeek)
+        else { return 0 }
+        var streak = 0
+        while weeks.contains(week), let previous = cal.date(byAdding: .weekOfYear, value: -1, to: week) {
+            streak += 1
+            week = previous
+        }
+        return streak
+    }
+
     var heartRates: [Int] {
         get { heartRateTimeline.flatMap { try? JSONDecoder().decode([Int].self, from: $0) } ?? [] }
         set { heartRateTimeline = try? JSONEncoder().encode(newValue) }

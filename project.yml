@@ -15,8 +15,8 @@ configs:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.1.0"
-    CURRENT_PROJECT_VERSION: "1"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "2"
     DEVELOPMENT_TEAM: "LDUCPMFSMH"
 targets:
   FORGE:
@@ -31,6 +31,8 @@ targets:
     info:
       path: FORGE/Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDisplayName: FORGE
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
@@ -57,9 +59,12 @@ targets:
       - path: FORGEWidgets
       - path: FORGE/Activity/WorkoutActivity.swift
       - path: Shared/Theme.swift
+      - path: Shared/WidgetSnapshot.swift
     info:
       path: FORGEWidgets/Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDisplayName: FORGE
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
@@ -67,6 +72,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.taj.forge.widgets
         TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_ENTITLEMENTS: FORGEWidgets/FORGEWidgets.entitlements   # App Group: reads the app's snapshot
 
   FORGETests:
     type: bundle.unit-test
@@ -86,9 +92,13 @@ targets:
     sources:
       - path: FORGEWatch
       - path: Shared
+    dependencies:
+      - target: FORGEWatchWidgets
     info:
       path: FORGEWatch/Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDisplayName: FORGE
         WKApplication: true
         WKCompanionAppBundleIdentifier: com.taj.forge
@@ -103,6 +113,27 @@ targets:
         Personal:
           CODE_SIGN_ENTITLEMENTS: FORGEWatch/FORGEWatch-Personal.entitlements
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) PERSONAL_TEAM
+
+  FORGEWatchWidgets:
+    type: app-extension
+    platform: watchOS
+    sources:
+      - path: FORGEWatchWidgets
+      - path: FORGEWidgets/TodayWidget.swift
+      - path: Shared/Theme.swift
+      - path: Shared/WidgetSnapshot.swift
+    info:
+      path: FORGEWatchWidgets/Info.plist
+      properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDisplayName: FORGE
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.taj.forge.watchkitapp.widgets
+        CODE_SIGN_ENTITLEMENTS: FORGEWatchWidgets/FORGEWatchWidgets.entitlements
 
 schemes:
   FORGE:

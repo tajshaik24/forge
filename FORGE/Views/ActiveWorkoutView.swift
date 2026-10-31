@@ -23,6 +23,7 @@ struct ActiveWorkoutView: View {
     @State private var restBuzz = 0
     @State private var restStarted: Date?
     @State private var phase: Phase = .lifting
+    @State private var confirmCancel = false
 
     /// Warm-up drills, then the lifts, then an optional cool-down.
     enum Phase { case warmUp, lifting, coolDown }
@@ -274,8 +275,16 @@ struct ActiveWorkoutView: View {
 
     private func header(_ plan: PlannedWorkout) -> some View {
         HStack {
-            Button { tracker.discard(); RestAlerts.cancel(); dismiss() } label: { Image(systemName: "xmark") }
+            Button {
+                if SetLogger.openSessions(in: ctx).contains(where: { !($0.sets ?? []).isEmpty }) { confirmCancel = true } else { cancel() }
+            } label: { Image(systemName: "xmark") }
                 .frame(width: 44, height: 44).accessibilityLabel("Cancel workout")
+                .confirmationDialog("Cancel this workout?", isPresented: $confirmCancel, titleVisibility: .visible) {
+                    Button("Delete workout and its sets", role: .destructive) { cancel() }
+                    Button("Keep going", role: .cancel) {}
+                } message: {
+                    Text("The sets you logged won't count toward your progress. To keep them, tap Finish instead.")
+                }
             Spacer()
             TimelineView(.periodic(from: .now, by: 1)) { _ in
                 HStack(spacing: 12) {
@@ -392,6 +401,14 @@ struct ActiveWorkoutView: View {
         let until = Date().addingTimeInterval(TimeInterval(plan.restSeconds))
         restUntil = until
         scheduleRestAlert(at: until, next: doneCount < ex.sets ? upNext : nextUp)
+    }
+
+    /// Throws the workout away: the Health workout and the sets logged in it.
+    private func cancel() {
+        tracker.discard()
+        SetLogger.discardOpenSessions(in: ctx)
+        RestAlerts.cancel()
+        dismiss()
     }
 
     private func finish() {

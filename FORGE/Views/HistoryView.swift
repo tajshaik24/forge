@@ -53,12 +53,7 @@ struct HistoryView: View {
         }
     }
 
-    private var weekStreak: Int {
-        // Newest first; an empty current week doesn't break the streak yet.
-        var weeks = Array(weeklyVolume.reversed().map(\.volume))
-        if weeks.first == 0 { weeks.removeFirst() }
-        return weeks.prefix(while: { $0 > 0 }).count
-    }
+    private var weekStreak: Int { WorkoutSession.weekStreak(sessions) }
 
     private var overview: some View {
         Card {

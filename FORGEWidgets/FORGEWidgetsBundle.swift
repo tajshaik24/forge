@@ -4,6 +4,8 @@ import WidgetKit
 @main
 struct FORGEWidgetsBundle: WidgetBundle {
     var body: some Widget {
+        TodayWidget()
+        StreakWidget()
         WorkoutLiveActivity()
     }
 }

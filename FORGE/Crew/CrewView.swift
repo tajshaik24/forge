@@ -1,4 +1,5 @@
 import SwiftUI
+import CloudKit
 import SwiftData
 
 struct CrewView: View {
@@ -8,6 +9,7 @@ struct CrewView: View {
     @State private var name = CrewService.shared.displayName
     @State private var nudged: Set<String> = []
     @State private var confirmLeave = false
+    @State private var inviting = false
 
     var body: some View {
         ScrollView {
@@ -28,14 +30,14 @@ struct CrewView: View {
         }
         .background(Theme.ground)
         .navigationTitle(crew.crew?.name ?? "Crew")
+        .sheet(isPresented: $inviting) {
+            if let share = crew.share { CrewInviteSheet(share: share, container: crew.container).ignoresSafeArea() }
+        }
         .toolbar {
             if crew.crew != nil {
                 Menu {
-                    if let url = crew.shareURL {
-                        ShareLink(item: url, subject: Text("Join my FORGE crew"),
-                                  message: Text("Join \(crew.crew?.name ?? "my crew") on FORGE and keep each other showing up.")) {
-                            Label("Invite friends", systemImage: "person.badge.plus")
-                        }
+                    if canInvite {
+                        Button("Invite friends", systemImage: "person.badge.plus") { inviting = true }
                     }
                     Button(crew.crew?.isOwner == true ? "End crew for everyone" : "Leave crew",
                            systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) { confirmLeave = true }
@@ -149,11 +151,9 @@ struct CrewView: View {
             }
             ForEach(crew.standings) { s in memberRow(s) }
 
-            if crew.members.count < 2, let url = crew.shareURL {
-                ShareLink(item: url, subject: Text("Join my FORGE crew")) {
-                    Label("Invite your crew", systemImage: "person.badge.plus")
-                }
-                .buttonStyle(AccentButtonStyle())
+            if crew.members.count < 2, canInvite {
+                Button { inviting = true } label: { Label("Invite your crew", systemImage: "person.badge.plus") }
+                    .buttonStyle(AccentButtonStyle())
             }
 
             SectionLabel("Activity")
@@ -220,6 +220,9 @@ struct CrewView: View {
         .background(s.atRisk ? Theme.accentWash : Theme.surface, in: RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(s.atRisk ? Theme.accent.opacity(0.4) : Theme.hairline))
     }
+
+    /// Crews are invite-only, so only the owner can add people.
+    private var canInvite: Bool { crew.crew?.isOwner == true && crew.share != nil }
 }
 
 /// Small card on Today that opens the crew.
@@ -249,4 +252,18 @@ struct CrewCard: View {
         .buttonStyle(.plain)
         .task { await crew.refresh() }
     }
+}
+
+/// Apple's sheet for inviting specific people to the crew by Messages, Mail or a link only they can use.
+private struct CrewInviteSheet: UIViewControllerRepresentable {
+    let share: CKShare
+    let container: CKContainer
+
+    func makeUIViewController(context: Context) -> UICloudSharingController {
+        let controller = UICloudSharingController(share: share, container: container)
+        controller.availablePermissions = [.allowPrivate, .allowReadWrite]
+        return controller
+    }
+
+    func updateUIViewController(_ controller: UICloudSharingController, context: Context) {}
 }

@@ -22,8 +22,21 @@ enum HealthService {
         let query = HKSampleQueryDescriptor(predicates: [predicate], sortDescriptors: [])
         guard let samples = try? await query.result(for: store), !samples.isEmpty else { return nil }
         let asleep = HKCategoryValueSleepAnalysis.allAsleepValues.map(\.rawValue)
-        let seconds = samples.filter { asleep.contains($0.value) }
-            .reduce(0.0) { $0 + $1.endDate.timeIntervalSince($1.startDate) }
+        // A Watch, the iPhone and sleep apps can all record the same night: merge overlaps so it counts once.
+        let intervals = samples.filter { asleep.contains($0.value) }
+            .map { ($0.startDate, $0.endDate) }
+            .sorted { $0.0 < $1.0 }
+        var seconds = 0.0
+        var current: (start: Date, end: Date)?
+        for (start, end) in intervals {
+            if let c = current, start <= c.end {
+                current = (c.start, max(c.end, end))
+            } else {
+                if let c = current { seconds += c.end.timeIntervalSince(c.start) }
+                current = (start, end)
+            }
+        }
+        if let c = current { seconds += c.end.timeIntervalSince(c.start) }
         return seconds > 0 ? seconds / 3600 : nil
     }
 

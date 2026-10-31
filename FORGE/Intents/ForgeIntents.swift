@@ -34,12 +34,24 @@ struct LogSetIntent: AppIntent {
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let ctx = DataStore.shared.mainContext
         let plan = DataStore.todayPlan(in: ctx)?.plan
-        // Match what the user said to a catalog name when possible ("leg press" -> "Leg press").
-        let name = ExerciseCatalog.all.first { $0.name.localizedCaseInsensitiveContains(exercise) }?.name ?? exercise
+        // Siri can launch FORGE cold, before your own exercises are loaded.
+        DataStore.refreshCustomExercises(in: ctx)
+        let name = Self.exerciseName(for: exercise, plan: plan)
         let unit = SyncedSettings.unit
         SetLogger.log(exercise: name, weight: unit.toPounds(weight), reps: reps,
                       focus: plan?.focus ?? "Workout", gymName: plan?.gymName ?? "", in: ctx)
         return .result(dialog: "Logged \(reps) reps of \(name) at \(unit.format(pounds: unit.toPounds(weight))).")
+    }
+
+    /// What the user said, as an exercise name: an exact match, then a lift in today's plan
+    /// ("row" on a pull day), then a partial match only when there's just one. Otherwise their words.
+    @MainActor
+    private static func exerciseName(for said: String, plan: PlannedWorkout?) -> String {
+        if let exact = ExerciseCatalog.match(said) { return exact.name }
+        let today = plan?.exercises.map(\.name).filter { $0.localizedCaseInsensitiveContains(said) } ?? []
+        if today.count == 1 { return today[0] }
+        let partial = ExerciseCatalog.all.filter { $0.name.localizedCaseInsensitiveContains(said) }
+        return partial.count == 1 ? partial[0].name : said
     }
 }
 

@@ -23,14 +23,15 @@ final class CrewService {
         var name: String
     }
 
-    private let container = CKContainer(identifier: DataStore.cloudContainerID)
+    let container = CKContainer(identifier: DataStore.cloudContainerID)
 
     private(set) var crew: CrewRef?
     private(set) var members: [CrewMember] = []
     private(set) var checkIns: [CrewCheckIn] = []
     private(set) var nudges: [CrewNudge] = []
     private(set) var myUserID: String?
-    private(set) var shareURL: URL?
+    /// The crew's share. Only the owner can invite, and only people they add can join.
+    private(set) var share: CKShare?
     private(set) var isLoading = false
     var errorText: String?
 
@@ -94,12 +95,12 @@ final class CrewService {
 
             let share = CKShare(recordZoneID: zone.zoneID)
             share[CKShare.SystemFieldKey.title] = name as CKRecordValue
-            share.publicPermission = .readWrite   // anyone with the link can join (beta)
+            share.publicPermission = .none   // invite-only: a forwarded link doesn't let strangers in
             let crewRecord = CKRecord(recordType: "Crew", recordID: CKRecord.ID(recordName: "crew", zoneID: zone.zoneID))
             crewRecord["name"] = name as CKRecordValue
 
             let result = try await db.modifyRecords(saving: [share, crewRecord], deleting: [], savePolicy: .allKeys)
-            if let saved = try? result.saveResults[share.recordID]?.get() as? CKShare { shareURL = saved.url }
+            if let saved = try? result.saveResults[share.recordID]?.get() as? CKShare { self.share = saved }
 
             store(CrewRef(zoneName: zone.zoneID.zoneName, ownerName: zone.zoneID.ownerName, isOwner: true, name: name))
             try await joinAsMember()
@@ -140,7 +141,7 @@ final class CrewService {
             errorText = "Couldn't leave cleanly: \(error.localizedDescription)"
         }
         store(nil)
-        members = []; checkIns = []; nudges = []; shareURL = nil
+        members = []; checkIns = []; nudges = []; share = nil
     }
 
     /// Writes (or updates) this user's member record. Safe to call repeatedly.
@@ -181,6 +182,14 @@ final class CrewService {
                 if let existing = byDay[key], existing.orderedSets.count >= s.orderedSets.count { continue }
                 byDay[key] = s
             }
+            // Only new or changed days: every save alerts the rest of the crew.
+            let postedKey = "crewPosted-\(zoneID.zoneName)"
+            var posted = UserDefaults.standard.dictionary(forKey: postedKey) as? [String: String] ?? [:]
+            func signature(_ s: WorkoutSession) -> String {
+                "\(name)|\(s.focus)|\(s.orderedSets.count)|\(Int(s.duration / 60))|\(s.healthWorkoutID != nil)"
+            }
+            byDay = byDay.filter { posted[$0.key] != signature($0.value) }
+            guard !byDay.isEmpty else { return }
             let records: [CKRecord] = byDay.map { key, s in
                 let r = CKRecord(recordType: "CheckIn", recordID: CKRecord.ID(recordName: "checkin-\(me)-\(key)", zoneID: zoneID))
                 r["userID"] = me as CKRecordValue
@@ -192,7 +201,14 @@ final class CrewService {
                 r["verified"] = (s.healthWorkoutID != nil ? 1 : 0) as CKRecordValue
                 return r
             }
-            _ = try await database.modifyRecords(saving: records, deleting: [], savePolicy: .allKeys)
+            let result = try await database.modifyRecords(saving: records, deleting: [], savePolicy: .allKeys)
+            for (key, s) in byDay {
+                let id = CKRecord.ID(recordName: "checkin-\(me)-\(key)", zoneID: zoneID)
+                if case .success = result.saveResults[id] { posted[key] = signature(s) }
+            }
+            // Keep the last two weeks; older days are never posted again.
+            let oldest = DayKey.of(since)
+            UserDefaults.standard.set(posted.filter { $0.key >= oldest }, forKey: postedKey)
         } catch {
             errorText = "Couldn't post your check-in: \(error.localizedDescription)"
         }
@@ -207,6 +223,14 @@ final class CrewService {
         do { _ = try await database.modifyRecords(saving: [r], deleting: [], savePolicy: .allKeys) }
         catch { errorText = "Couldn't send the nudge: \(error.localizedDescription)" }
         await refresh()
+    }
+
+    /// Crews made before invites were private had an open link anyone could join with.
+    /// Close it; people who already joined stay in.
+    private func closeOpenLink() async {
+        guard crew?.isOwner == true, let share, share.publicPermission != .none else { return }
+        share.publicPermission = .none
+        if let saved = try? await database.save(share) as? CKShare { self.share = saved }
     }
 
     // MARK: Sync
@@ -228,15 +252,16 @@ final class CrewService {
                 more = page.moreComing
             }
             apply(records)
-            if shareURL == nil {
+            if share == nil {
                 let shareID = CKRecord.ID(recordName: CKRecordNameZoneWideShare, zoneID: zoneID)
-                shareURL = (try? await database.record(for: shareID) as? CKShare)?.url
+                share = try? await database.record(for: shareID) as? CKShare
             }
+            await closeOpenLink()
             errorText = nil
         } catch let error as CKError where Self.zoneIsGone(error) {
             // The owner ended the crew, or you were removed.
             store(nil)
-            members = []; checkIns = []; nudges = []; shareURL = nil
+            members = []; checkIns = []; nudges = []; share = nil
             errorText = "This crew no longer exists."
         } catch {
             errorText = "Couldn't refresh the crew: \(error.localizedDescription)"

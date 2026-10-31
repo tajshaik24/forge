@@ -29,6 +29,7 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate {
 
 /// Today's plan, from the iPhone over iCloud or sent directly when the phone is nearby.
 struct WatchPlanView: View {
+    @Environment(\.modelContext) private var ctx
     @Query(sort: \DailyPlan.updatedAt, order: .reverse) private var plans: [DailyPlan]
     @State private var training = false
     private let link = PhoneWatchLink.shared
@@ -71,5 +72,8 @@ struct WatchPlanView: View {
         .onChange(of: tracker.isRunning, initial: true) {
             if tracker.isRunning, today != nil { training = true }
         }
+        // Keep the complications on today's plan.
+        .onChange(of: today, initial: true) { WidgetSnapshot.publish(plan: today, in: ctx) }
+        .onChange(of: tracker.isRunning) { if !tracker.isRunning { WidgetSnapshot.publish(plan: today, in: ctx) } }
     }
 }

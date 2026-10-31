@@ -70,10 +70,15 @@ final class WorkoutTracker: NSObject {
 
     // MARK: Permissions
 
+    /// Only what's read: live heart rate and calories in a workout, plus (iPhone only) last night's sleep
+    /// and HRV for the coach.
     static var readTypes: Set<HKObjectType> {
+        #if os(iOS)
         [HKQuantityType(.heartRate), HKQuantityType(.activeEnergyBurned),
-         HKQuantityType(.heartRateVariabilitySDNN), HKQuantityType(.restingHeartRate),
-         HKCategoryType(.sleepAnalysis), HKObjectType.workoutType()]
+         HKQuantityType(.heartRateVariabilitySDNN), HKCategoryType(.sleepAnalysis)]
+        #else
+        [HKQuantityType(.heartRate), HKQuantityType(.activeEnergyBurned)]
+        #endif
     }
 
     static var shareTypes: Set<HKSampleType> {
@@ -147,7 +152,15 @@ final class WorkoutTracker: NSObject {
     }
 
     private func adopt(_ mirrored: HKWorkoutSession) {
-        guard !isRunning else { return }   // already training on the phone alone
+        if isRunning {
+            guard !isMirrored else { return }
+            // The Watch started after startOnWatch gave up and the phone began on its own. The Watch's
+            // workout wins, so Health gets one entry; the sets are already saved here either way.
+            session?.delegate = nil
+            builder?.delegate = nil
+            session?.end()
+            builder?.discardWorkout()
+        }
         mirrored.delegate = self
         let builder = mirrored.associatedWorkoutBuilder()
         builder.delegate = self
@@ -414,12 +427,25 @@ enum SetLogger {
 
     @MainActor
     static func openSession(focus: String, gymName: String, in ctx: ModelContext) -> WorkoutSession {
-        let startOfDay = Calendar.current.startOfDay(for: .now)
-        let d = FetchDescriptor<WorkoutSession>(predicate: #Predicate { $0.date >= startOfDay && $0.endDate == nil },
-                                                sortBy: [SortDescriptor(\.date, order: .reverse)])
-        if let open = try? ctx.fetch(d).first { return open }
+        if let open = openSessions(in: ctx).first { return open }
         let s = WorkoutSession(focus: focus, gymName: gymName)
         ctx.insert(s)
         return s
+    }
+
+    /// Today's unfinished sessions, newest first.
+    @MainActor
+    static func openSessions(in ctx: ModelContext) -> [WorkoutSession] {
+        let startOfDay = Calendar.current.startOfDay(for: .now)
+        let d = FetchDescriptor<WorkoutSession>(predicate: #Predicate { $0.date >= startOfDay && $0.endDate == nil },
+                                                sortBy: [SortDescriptor(\.date, order: .reverse)])
+        return (try? ctx.fetch(d)) ?? []
+    }
+
+    /// A cancelled workout: delete its session and the sets logged in it, so they don't count anywhere.
+    @MainActor
+    static func discardOpenSessions(in ctx: ModelContext) {
+        openSessions(in: ctx).forEach(ctx.delete)   // sets go with it (cascade)
+        try? ctx.save()
     }
 }

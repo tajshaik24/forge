@@ -24,6 +24,7 @@ struct FORGEApp: App {
 struct RootView: View {
     @Environment(\.modelContext) private var ctx
     @Environment(CoachStore.self) private var coach
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showSetup = !SyncedSettings.onboarded
 
     var body: some View {
@@ -40,6 +41,10 @@ struct RootView: View {
                 Task { await coach.invalidate(ctx) }
             }
         }
+        // Keep the widgets on today's plan, streak and next training day.
+        .onChange(of: coach.plan, initial: true) { WidgetSnapshot.publish(plan: coach.plan, in: ctx) }
+        .onChange(of: coach.lastFinished) { WidgetSnapshot.publish(plan: coach.plan, in: ctx) }
+        .onChange(of: scenePhase) { if scenePhase == .background { WidgetSnapshot.publish(plan: coach.plan, in: ctx) } }
         .onChange(of: WorkoutTracker.shared.remoteFinishCount) {
             // The shared workout ended on the Watch: file it here whether or not its screen is open.
             Task { _ = await coach.finishWorkout(ctx) }
