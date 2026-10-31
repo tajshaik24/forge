@@ -34,7 +34,7 @@ targets:
         CFBundleDisplayName: FORGE
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
-        UIBackgroundModes: [remote-notification, workout-processing]
+        UIBackgroundModes: [remote-notification]
         CKSharingSupported: true
         NSSupportsLiveActivities: true
         NSHealthShareUsageDescription: "FORGE reads your heart rate, sleep and heart-rate variability to track workouts and adjust today's training volume."
