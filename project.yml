@@ -36,6 +36,7 @@ targets:
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIBackgroundModes: [remote-notification]
         CKSharingSupported: true
+        ITSAppUsesNonExemptEncryption: false   # only Apple's standard encryption; skips the export compliance question
         NSSupportsLiveActivities: true
         NSHealthShareUsageDescription: "FORGE reads your heart rate, sleep and heart-rate variability to track workouts and adjust today's training volume."
         NSHealthUpdateUsageDescription: "FORGE saves your strength workouts, heart rate and active calories to Apple Health so they appear in Fitness."
