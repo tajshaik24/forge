@@ -8,7 +8,12 @@ struct FORGEApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var coach = CoachStore()
 
-    init() { PhoneWatchLink.shared.activate() }
+    init() {
+        #if DEBUG && !PERSONAL_TEAM
+        DataStore.initializeCloudKitSchemaIfRequested()
+        #endif
+        PhoneWatchLink.shared.activate()
+    }
 
     var body: some Scene {
         WindowGroup {

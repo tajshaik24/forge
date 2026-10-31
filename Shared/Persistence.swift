@@ -1,5 +1,8 @@
 import Foundation
 import SwiftData
+#if DEBUG && os(iOS)
+import CoreData
+#endif
 
 // CloudKit-backed SwiftData rules: every attribute has a default or is optional,
 // every relationship is optional, and nothing is marked unique.
@@ -190,8 +193,9 @@ final class CustomExercise {
 
 enum DataStore {
     static let cloudContainerID = "iCloud.com.taj.forge"
-    static let schema = Schema([WorkoutSession.self, SetEntry.self, CoachNote.self, GymProfile.self, DailyPlan.self,
-                                ChatEntry.self, CustomExercise.self])
+    static let models: [any PersistentModel.Type] = [WorkoutSession.self, SetEntry.self, CoachNote.self, GymProfile.self,
+                                                     DailyPlan.self, ChatEntry.self, CustomExercise.self]
+    static let schema = Schema(models)
 
     /// Syncs through the user's private iCloud database. Falls back to on-device storage
     /// if iCloud isn't set up (e.g. a simulator not signed in), so the app still runs.
@@ -311,3 +315,34 @@ enum Seed {
         try? context.save()
     }
 }
+
+#if DEBUG && os(iOS) && !PERSONAL_TEAM
+extension DataStore {
+    /// Development builds only. Creates every sync record type in the CloudKit development schema (which
+    /// SwiftData otherwise does lazily, one type at a time), so the whole schema can be deployed to production.
+    /// Run once on a device signed in to iCloud: launch with `-initializeCloudKitSchema`.
+    static func initializeCloudKitSchemaIfRequested() {
+        guard ProcessInfo.processInfo.arguments.contains("-initializeCloudKitSchema") else { return }
+        autoreleasepool {
+            let description = NSPersistentStoreDescription(url: URL.temporaryDirectory.appending(path: "schema.sqlite"))
+            description.cloudKitContainerOptions = NSPersistentCloudKitContainerOptions(containerIdentifier: cloudContainerID)
+            description.shouldAddStoreAsynchronously = false
+            guard let model = NSManagedObjectModel.makeManagedObjectModel(for: models) else {
+                return print("FORGE schema: couldn't build the model")
+            }
+            let container = NSPersistentCloudKitContainer(name: "FORGESchema", managedObjectModel: model)
+            container.persistentStoreDescriptions = [description]
+            container.loadPersistentStores { _, error in if let error { print("FORGE schema: \(error)") } }
+            do {
+                try container.initializeCloudKitSchema()
+                print("FORGE schema: initialized")
+            } catch {
+                print("FORGE schema: \(error)")
+            }
+            for store in container.persistentStoreCoordinator.persistentStores {
+                try? container.persistentStoreCoordinator.remove(store)
+            }
+        }
+    }
+}
+#endif
