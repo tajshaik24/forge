@@ -6,9 +6,10 @@ import WatchKit
 /// Three pages, swiped sideways so the Crown stays free for weight and reps: controls, the set
 /// you're on, and the whole workout with what you've done.
 struct WatchWorkoutView: View {
-    let plan: PlannedWorkout
+    /// Grows as you add lifts, and follows the iPhone's edits in a shared workout.
+    @State private var plan: PlannedWorkout
 
-    init(plan: PlannedWorkout) { self.plan = plan }
+    init(plan: PlannedWorkout) { _plan = State(initialValue: plan) }
 
     @Environment(\.modelContext) private var ctx
     @Environment(\.dismiss) private var dismiss
@@ -30,6 +31,7 @@ struct WatchWorkoutView: View {
     @State private var logged: [String: [SetDone]] = [:]
     /// Warm-up steps done (or skipped) per exercise.
     @State private var warmedUp: [String: Int] = [:]
+    @State private var adding = false
 
     enum Page { case controls, log, workout }
     enum Field { case weight, reps }
@@ -67,6 +69,8 @@ struct WatchWorkoutView: View {
                             warmUp(ex, warm.index, warm.total, warm.step)
                         } else if let ex = current {
                             log(ex)
+                        } else {
+                            empty
                         }
                     }
                     .tag(Page.log)
@@ -87,6 +91,20 @@ struct WatchWorkoutView: View {
             restUntil = change.until
             if change.until == nil { setStarted = .now }
         }
+        .sheet(isPresented: $adding) {
+            NavigationStack {
+                WatchAddExerciseView(existing: Set(plan.exercises.map(\.name))) { add($0) }
+            }
+        }
+        // Lifts added or swapped on the iPhone during a shared workout.
+        .onChange(of: PhoneWatchLink.shared.todayPlan) {
+            guard tracker.isMirrored, let updated = PhoneWatchLink.shared.todayPlan, updated != plan,
+                  updated.isCustom == plan.isCustom else { return }
+            let name = current?.name
+            plan = updated
+            if let name, let i = plan.exercises.firstIndex(where: { $0.name == name }) { exerciseIndex = i }
+            if current == nil, !plan.exercises.isEmpty { exerciseIndex = 0; prefill() }
+        }
         .onChange(of: tracker.isRunning) {
             // Ended from the iPhone.
             guard !tracker.isRunning, !done else { return }
@@ -105,7 +123,7 @@ struct WatchWorkoutView: View {
                     .lineLimit(2).minimumScaleFactor(0.8)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 4) {
-                    Text("Set \(min(setNumber, ex.sets)) of \(ex.sets)")
+                    Text(plan.isCustom && setNumber > ex.sets ? "Extra set" : "Set \(min(setNumber, ex.sets)) of \(ex.sets)")
                     if let t = ex.target, t.weight > 0 {
                         Text("· \(unit.format(pounds: t.weight)) × \(t.reps)").foregroundStyle(Theme.accentText)
                     }
@@ -123,6 +141,22 @@ struct WatchWorkoutView: View {
                                       by: editing == .weight ? unit.step : (timed ? 5 : 1),
                                       sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
                 Button("Log set") { logSet(ex) }
+                    .buttonStyle(.borderedProminent)
+                if plan.isCustom, setNumber > ex.sets {
+                    Button("Add exercise") { adding = true }
+                }
+            }
+        }
+    }
+
+    /// Your own workout before its first lift.
+    private var empty: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("YOUR WORKOUT").font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.accent)
+                Text("Add lifts as you go. Weights come from your history.")
+                    .font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
+                Button("Add exercise") { adding = true }
                     .buttonStyle(.borderedProminent)
             }
         }
@@ -221,6 +255,7 @@ struct WatchWorkoutView: View {
                     }
                     .buttonStyle(.plain)
                 }
+                Button("Add exercise", systemImage: "plus") { adding = true }
             }
         }
     }
@@ -335,7 +370,17 @@ struct WatchWorkoutView: View {
     /// A set logged on the iPhone: move on as if it was logged here.
     private func loggedOnPhone(_ set: LoggedSet) {
         logged[set.exercise, default: []].append(SetDone(pounds: set.weight, reps: set.reps))
-        guard let ex = current else { return }
+        if !plan.exercises.contains(where: { $0.name == set.exercise }), let catalog = ExerciseCatalog.named(set.exercise) {
+            // Added on the iPhone; its updated plan may not have arrived yet.
+            plan.exercises.append(WatchPicks.planned(catalog, ctx))
+        }
+        guard let ex = current else {
+            exerciseIndex = plan.exercises.firstIndex { $0.name == set.exercise } ?? 0
+            setNumber = 1
+            WKInterfaceDevice.current().play(.click)
+            advance(plan.exercises[exerciseIndex])
+            return
+        }
         if set.exercise != ex.name {
             guard let i = plan.exercises.firstIndex(where: { $0.name == set.exercise }) else { return }
             exerciseIndex = i
@@ -352,11 +397,29 @@ struct WatchWorkoutView: View {
             exerciseIndex += 1
             setNumber = 1
             prefill()
+        } else if plan.isCustom {
+            // Your own workout ends when you say: keep going, add a lift, or end it.
+            setNumber += 1
         } else {
             Task { await finish() }
             return
         }
         restUntil = Date().addingTimeInterval(TimeInterval(plan.restSeconds))
+    }
+
+    /// A lift picked here: up next if you're done with the one you're on.
+    private func add(_ ex: PlannedExercise) {
+        let at = plan.exercises.isEmpty ? 0 : min(exerciseIndex + 1, plan.exercises.count)
+        let finishedCurrent = current.map { (logged[$0.name]?.count ?? 0) >= $0.sets } ?? true
+        plan.exercises.insert(ex, at: at)
+        if plan.isCustom { plan.retitle(unit: unit, warmUps: SyncedSettings.warmUps) }
+        if finishedCurrent {
+            exerciseIndex = at
+            setNumber = 1
+            restUntil = nil
+            prefill()
+            page = .log
+        }
     }
 
     /// Picks up at an exercise from the workout list.
@@ -390,6 +453,8 @@ struct WatchWorkoutView: View {
         self.result = result
         guard !shared else { done = true; return }   // the iPhone files it from the result
         let session = SetLogger.openSession(focus: plan.focus, gymName: plan.gymName, in: ctx)
+        // Named after the lifts you added, which the first set didn't know yet.
+        if plan.isCustom { session.focus = plan.focus }
         session.endDate = result?.end ?? .now
         if let r = result {
             session.date = min(session.date, r.start)

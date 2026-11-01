@@ -27,6 +27,8 @@ final class CoachStore {
     private var minutesOverrides: [String: Int] = [:]
     /// Set when week planning is requested while a pass is already running (true = clear future plans first).
     private var pendingWeekPass: Bool?
+    /// The coach's plan for today, kept while you do your own workout so cancelling puts it back.
+    private var setAside: PlannedWorkout?
 
     init() {
         if AppleIntelligenceCoach.isAvailable {
@@ -116,6 +118,7 @@ final class CoachStore {
             isThinking = false
         }
         await planWeek(ctx)
+        await replanIfTrainedOffPlan(ctx)
     }
 
     /// Plans saved before warm-ups existed get them added, without rebuilding the lifts.
@@ -271,6 +274,7 @@ final class CoachStore {
     func replaceTodayExercises(_ exercises: [PlannedExercise], _ ctx: ModelContext) {
         guard var updated = plan else { return }
         updated.exercises = exercises
+        if updated.isCustom { updated.retitle(unit: SyncedSettings.unit, warmUps: SyncedSettings.warmUps) }
         plan = updated
         DataStore.save(updated, in: ctx)
     }
@@ -281,6 +285,63 @@ final class CoachStore {
         let context = makeContext(ctx)
         return Progression.target(for: ex, history: DataStore.history(of: ex.name, in: ctx),
                                   signal: context.signal, unit: context.unit, goal: context.trainingGoal)
+    }
+
+    /// A lift added to a workout as you go: 3 sets at the coach's target, or a short weight test
+    /// when you've never logged it.
+    func adding(_ exercise: Exercise, _ ctx: ModelContext) -> PlannedExercise {
+        let target = target(for: exercise.name, ctx)
+        let goal = TrainingGoal(rawValue: SyncedSettings.goal) ?? .buildMuscle
+        return PlannedExercise(name: exercise.name, sets: 3, reps: RepScheme.reps(for: exercise, goal: goal), target: target,
+                               calibrate: target == nil && Calibration.applies(to: exercise) ? true : nil)
+    }
+
+    // MARK: Your own workout
+
+    /// Today becomes your own workout in place of the coach's: it starts empty and you add the lifts.
+    func startOwnWorkout(_ ctx: ModelContext) {
+        if plan?.isCustom != true { setAside = plan }
+        let goal = TrainingGoal(rawValue: SyncedSettings.goal) ?? .buildMuscle
+        let own = PlannedWorkout.own(gymName: DataStore.activeGym(in: ctx)?.name ?? "Gym",
+                                     restSeconds: RepScheme.rest(for: goal))
+        plan = own
+        DataStore.save(own, in: ctx)
+    }
+
+    /// Your own workout was cancelled: today goes back to the coach's plan.
+    func restoreCoachPlan(_ ctx: ModelContext) {
+        guard plan?.isCustom == true, let saved = setAside else { return }
+        setAside = nil
+        plan = saved
+        DataStore.save(saved, in: ctx)
+    }
+
+    /// You trained something other than the coach's plan today (your own workout, a custom one on the
+    /// Watch, or on a rest day): rebuild the coming training days around what you actually did.
+    /// Days off stay days off. Runs once per workout.
+    func replanIfTrainedOffPlan(_ ctx: ModelContext) async {
+        let start = Calendar.current.startOfDay(for: .now)
+        var d = FetchDescriptor<WorkoutSession>(predicate: #Predicate { $0.date >= start && $0.endDate != nil },
+                                                sortBy: [SortDescriptor(\.date, order: .reverse)])
+        d.fetchLimit = 1
+        guard let session = try? ctx.fetch(d).first, let today = DataStore.todayPlan(in: ctx)?.plan,
+              today.isCustom || session.focus != today.focus else { return }
+        let key = "replannedAfter"
+        let stamp = session.date.timeIntervalSince1970
+        guard UserDefaults.standard.double(forKey: key) != stamp, !isPlanningWeek else { return }
+        UserDefaults.standard.set(stamp, forKey: key)
+        setAside = nil
+        isPlanningWeek = true
+        defer { isPlanningWeek = false }
+        var assumed: [PlannedWorkout] = []
+        for day in DataStore.upcomingPlans(in: ctx) where day.date > start {
+            guard !day.isRestDay, !day.isCustom else { assumed.append(day); continue }
+            var context = makeContext(ctx, date: day.date, assumed: assumed)
+            context.isTrainingDay = true
+            guard let built = await build(context) else { assumed.append(day); continue }
+            DataStore.save(built, in: ctx)
+            assumed.append(built)
+        }
     }
 
     // MARK: Chat (saved in SwiftData as ChatEntry, so it syncs and survives relaunch)
@@ -353,6 +414,8 @@ final class CoachStore {
     func finishWorkout(_ ctx: ModelContext) async -> WorkoutSession? {
         let result = await WorkoutTracker.shared.finish()
         let session = SetLogger.openSession(focus: plan?.focus ?? "Workout", gymName: plan?.gymName ?? "", in: ctx)
+        // Your own workout is named after the lifts you added, which the first set didn't know yet.
+        if let plan, plan.isCustom { session.focus = plan.focus }
         session.endDate = result?.end ?? .now
         if let r = result {
             session.date = min(session.date, r.start)
@@ -367,6 +430,8 @@ final class CoachStore {
         RestAlerts.cancel()
         if SyncedSettings.crewBeta { Task { await CrewService.shared.postCheckIns(from: ctx) } }
         lastFinished = session
+        setAside = nil
+        Task { await replanIfTrainedOffPlan(ctx) }
         return session
     }
 }

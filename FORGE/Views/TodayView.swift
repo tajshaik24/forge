@@ -28,11 +28,17 @@ struct TodayView: View {
                 if isTodaySelected, let plan = coach.plan, !plan.isRestDay {
                     Button(tracker.isRunning ? "Resume workout" : "Start workout") { working = true }
                         .buttonStyle(AccentButtonStyle())
-                    NavigationLink { PlanView() } label: {
-                        Text(SyncedSettings.warmUps ? "Full plan with warm-up and cool-down" : "Full plan")
-                            .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.accentText)
-                            .frame(maxWidth: .infinity)
+                    if !plan.isCustom {
+                        NavigationLink { PlanView() } label: {
+                            Text(SyncedSettings.warmUps ? "Full plan with warm-up and cool-down" : "Full plan")
+                                .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.accentText)
+                                .frame(maxWidth: .infinity)
+                        }
+                        if !tracker.isRunning, selectedDone == nil { ownWorkoutButton("Do my own workout instead") }
                     }
+                } else if isTodaySelected, !tracker.isRunning, selectedDone == nil, coach.plan != nil {
+                    // A rest day: you can still train.
+                    ownWorkoutButton("Start my own workout")
                 } else if !isTodaySelected, selectedDone == nil, let plan = selectedPlan, !plan.isRestDay {
                     NavigationLink { PlanView(day: plan) } label: { Text("View plan") }
                         .buttonStyle(AccentButtonStyle())
@@ -106,6 +112,18 @@ struct TodayView: View {
         }
     }
 
+    /// An empty workout you fill as you go, in place of the coach's plan for today.
+    private func ownWorkoutButton(_ title: String) -> some View {
+        Button {
+            coach.startOwnWorkout(ctx)
+            working = true
+        } label: {
+            Label(title, systemImage: "plus.circle")
+                .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.accentText)
+                .frame(maxWidth: .infinity, minHeight: 44)
+        }
+    }
+
     private var dayLabel: String {
         isTodaySelected ? "TODAY" : selected.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()).uppercased()
     }
@@ -165,7 +183,9 @@ struct TodayView: View {
     private func pickCard(_ plan: PlannedWorkout) -> some View {
         Card {
             HStack {
-                Text(plan.isRestDay ? "REST DAY · \(dayLabel)" : (isTodaySelected ? "COACH PICK" : "PLANNED · \(dayLabel)"))
+                Text(plan.isRestDay ? "REST DAY · \(dayLabel)"
+                     : plan.isCustom ? "YOUR WORKOUT · \(dayLabel)"
+                     : (isTodaySelected ? "COACH PICK" : "PLANNED · \(dayLabel)"))
                     .font(Theme.mono(11)).foregroundStyle(Theme.accentText)
                 Spacer()
                 Label(plan.engine, systemImage: plan.engine == "AI Coach" ? "sparkles" : "gearshape")

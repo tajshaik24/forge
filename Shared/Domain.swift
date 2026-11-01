@@ -266,7 +266,11 @@ struct PlannedWorkout: Codable, Sendable, Hashable {
     var coolDown: [PlannedExercise] = []
 
     var totalSets: Int { exercises.reduce(0) { $0 + $1.sets } }
-    var isRestDay: Bool { exercises.isEmpty }
+    /// Made by you rather than the coach: your own workout on the iPhone, or one picked on the Watch.
+    static let customEngine = "Custom"
+    var isCustom: Bool { engine == Self.customEngine }
+    /// Your own workout starts with no lifts and isn't a day off.
+    var isRestDay: Bool { exercises.isEmpty && !isCustom }
 
     private enum CodingKeys: String, CodingKey {
         case date, focus, muscles, minutes, reasons, exercises, restSeconds, gymName, engine, warmUp, coolDown
@@ -309,6 +313,32 @@ struct PlannedWorkout: Codable, Sendable, Hashable {
         PlannedWorkout(date: Calendar.current.startOfDay(for: day), focus: "Rest", muscles: [], minutes: 0,
                        reasons: ["Rest day. Walk, stretch, sleep."], exercises: [], restSeconds: 0,
                        gymName: gymName, engine: engine)
+    }
+
+    /// Your own workout for today: starts empty, and you add lifts as you go.
+    static func own(gymName: String, restSeconds: Int) -> PlannedWorkout {
+        PlannedWorkout(date: Calendar.current.startOfDay(for: .now), focus: ownFocus, muscles: [], minutes: 0,
+                       reasons: ["Your own workout. Add lifts as you go."], exercises: [], restSeconds: restSeconds,
+                       gymName: gymName, engine: customEngine)
+    }
+
+    static let ownFocus = "Own workout"
+
+    /// "Chest + Back", with a trailing "+" for three or more muscles.
+    static func focus(for muscles: [MuscleGroup]) -> String {
+        guard !muscles.isEmpty else { return ownFocus }
+        return muscles.prefix(2).map(\.label).joined(separator: " + ") + (muscles.count > 2 ? " +" : "")
+    }
+
+    /// A custom workout's name, muscles and length follow the lifts in it.
+    mutating func retitle(unit: WeightUnit, warmUps: Bool) {
+        var seen: [MuscleGroup] = []
+        for ex in exercises {
+            if let m = ExerciseCatalog.named(ex.name)?.primary, !seen.contains(m) { seen.append(m) }
+        }
+        muscles = seen
+        focus = Self.focus(for: seen)
+        minutes = exercises.isEmpty ? 0 : estimatedMinutes(unit: unit, warmUps: warmUps)
     }
 }
 

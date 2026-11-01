@@ -92,6 +92,8 @@ struct ActiveWorkoutView: View {
                 DrillsView(mode: .coolDown, drills: plan.coolDown) { finish() }
             } else if let current, let plan {
                 training(current, plan)
+            } else if let plan, plan.isCustom {
+                emptyWorkout(plan)
             } else {
                 ProgressView()
             }
@@ -216,7 +218,7 @@ struct ActiveWorkoutView: View {
                 Spacer()
                 Menu {
                     Button("Swap exercise", systemImage: "arrow.triangle.2.circlepath") { sheet = .swap }
-                    Button("Add exercise after this", systemImage: "plus") { sheet = .add }
+                    Button(plan.isCustom ? "Add exercise" : "Add exercise after this", systemImage: "plus") { sheet = .add }
                     Button("Skip to next", systemImage: "forward") { next() }
                 } label: {
                     Image(systemName: "ellipsis.circle").font(.system(size: 22)).frame(width: 44, height: 44)
@@ -251,6 +253,10 @@ struct ActiveWorkoutView: View {
             }
 
             setStrip(ex)
+
+            if plan.isCustom, exerciseIndex + 1 >= exercises.count, working(logged(ex.name), ex) >= ex.sets {
+                allDoneCard
+            }
 
             if let restUntil {
                 RestPanel(until: restUntil,
@@ -311,7 +317,7 @@ struct ActiveWorkoutView: View {
                     Text(elapsed).monospacedDigit()
                     Label("\(Int(tracker.heartRate))", systemImage: "heart.fill")
                         .foregroundStyle(tracker.heartRate > 0 ? Theme.text : Theme.muted)
-                    Text("\(exerciseIndex + 1) OF \(exercises.count)")
+                    if !exercises.isEmpty { Text("\(exerciseIndex + 1) OF \(exercises.count)") }
                 }
                 .font(Theme.mono(13)).foregroundStyle(Theme.muted)
             }
@@ -389,6 +395,11 @@ struct ActiveWorkoutView: View {
 
     /// A set logged on the Watch (already saved by the tracker): move on as if it was logged here.
     private func loggedOnWatch(_ set: LoggedSet) {
+        if let plan, !plan.exercises.contains(where: { $0.name == set.exercise }),
+           let catalog = ExerciseCatalog.named(set.exercise) {
+            // Added on the Watch: add it here too, so both show the same workout.
+            coach.replaceTodayExercises(plan.exercises + [coach.adding(catalog, ctx)], ctx)
+        }
         guard let plan, let ex = exercises.first(where: { $0.name == set.exercise }) else { return }
         let name = set.exercise
         let start = Calendar.current.startOfDay(for: .now)
@@ -406,6 +417,8 @@ struct ActiveWorkoutView: View {
             if exerciseIndex + 1 < exercises.count {
                 exerciseIndex += 1
                 prefill()
+            } else if plan.isCustom {
+                // Your own workout ends when you say: rest, then add another lift or tap Finish.
             } else {
                 guard finishWhenDone else { return }
                 if plan.coolDown.isEmpty { finish() } else { withAnimation { phase = .coolDown } }
@@ -422,6 +435,7 @@ struct ActiveWorkoutView: View {
         tracker.discard()
         SetLogger.discardOpenSessions(in: ctx)
         RestAlerts.cancel()
+        coach.restoreCoachPlan(ctx)
         dismiss()
     }
 
@@ -555,10 +569,56 @@ struct ActiveWorkoutView: View {
 
     private func add(_ exercise: Exercise) {
         guard var list = plan?.exercises else { return }
-        let item = PlannedExercise(name: exercise.name, sets: 3, reps: exercise.reps,
-                                   target: coach.target(for: exercise.name, ctx))
-        list.insert(item, at: min(exerciseIndex + 1, list.count))
+        let at = list.isEmpty ? 0 : min(exerciseIndex + 1, list.count)
+        list.insert(coach.adding(exercise, ctx), at: at)
+        // Done with the lift you're on (or nothing yet): the new one is up next.
+        let finishedCurrent = current.map { working(logged($0.name), $0) >= $0.sets } ?? true
         coach.replaceTodayExercises(list, ctx)
+        if finishedCurrent {
+            exerciseIndex = at
+            prefill()
+        }
+    }
+
+    // MARK: Your own workout
+
+    /// Before the first lift: pick one to start.
+    private func emptyWorkout(_ plan: PlannedWorkout) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                header(plan)
+                Text("YOUR WORKOUT").font(Theme.display(40))
+                Text("Add lifts as you go. Weights come from your history, with warm-up sets before heavy lifts, and lifts you've never logged start with a light test set.")
+                    .font(.system(size: 14)).foregroundStyle(Theme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button("Add your first exercise") { sheet = .add }
+                    .buttonStyle(AccentButtonStyle())
+            }
+            .padding(20)
+        }
+    }
+
+    /// The last lift's sets are done in your own workout.
+    private var allDoneCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("SETS DONE").font(Theme.mono(11)).foregroundStyle(Theme.accentText)
+            Text("Add another exercise, keep doing sets of this one, or finish.")
+                .font(.system(size: 14)).fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Button("Add exercise") { sheet = .add }
+                    .font(.system(size: 15, weight: .semibold))
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .overlay(Capsule().stroke(Theme.hairline))
+                Button("Finish") { finish() }
+                    .font(.system(size: 15, weight: .heavy))
+                    .foregroundStyle(Theme.onAccent)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(Theme.text, in: Capsule())
+            }
+        }
+        .padding(14)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.hairline))
     }
 
     /// Start from the coach's target, else what you lifted last time.

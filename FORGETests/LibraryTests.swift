@@ -180,3 +180,28 @@ func libraryContext(equipment: Set<Equipment>, notes: [NoteSnapshot] = []) -> Co
                  goal: "Build muscle", minutes: 48, gymName: "Test", equipment: equipment,
                  notes: notes, recent: [], readiness: [:], health: HealthSnapshot(), currentPlan: nil)
 }
+
+@Suite("Your own workout")
+struct OwnWorkoutTests {
+    @Test func anEmptyOwnWorkoutIsNotARestDay() {
+        let own = PlannedWorkout.own(gymName: "Gym", restSeconds: 90)
+        #expect(!own.isRestDay)
+        #expect(own.isCustom)
+        #expect(PlannedWorkout.rest(on: .now, gymName: "Gym", engine: "test").isRestDay)
+    }
+
+    @Test func itsNameAndLengthFollowTheLiftsAdded() {
+        var own = PlannedWorkout.own(gymName: "Gym", restSeconds: 90)
+        own.exercises = ["Barbell bench press", "Barbell row", "Back squat"].map {
+            PlannedExercise(name: $0, sets: 3, reps: "8-10", target: LoadTarget(weight: 135, reps: 8, note: ""))
+        }
+        own.retitle(unit: .lb, warmUps: true)
+        #expect(own.muscles == [.chest, .back, .quads])
+        #expect(own.focus == "Chest + Back +")
+        #expect(own.minutes == own.estimatedMinutes(unit: .lb, warmUps: true))
+        own.exercises = []
+        own.retitle(unit: .lb, warmUps: true)
+        #expect(own.focus == PlannedWorkout.ownFocus)
+        #expect(own.minutes == 0)
+    }
+}
