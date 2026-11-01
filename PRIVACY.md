@@ -13,7 +13,7 @@ FORGE is a strength-training app for iPhone and Apple Watch. It has no account, 
 
 With your permission, FORGE:
 
-- **reads** heart rate and active calories during a workout, and (on iPhone) last night's sleep and heart-rate variability, to decide how hard today's workout should be;
+- **reads** heart rate and active calories during a workout, and (on iPhone) last night's sleep, heart-rate variability and your step count, to show your steps and decide how hard today's workout should be;
 - **saves** your strength workouts, heart rate and active calories, so they appear in Apple Health and Fitness.
 
 Health data is used only to run your workouts and plan your training. It is never used for advertising, never sold, and never shared with anyone except as described under Crews below (which shares no Health data). You can change FORGE's Health access at any time in **Settings → Health → Data Access & Devices**.

@@ -7,6 +7,8 @@ struct GymsView: View {
     @Query(sort: \GymProfile.sortIndex) private var gyms: [GymProfile]
     @State private var adding = false
     @State private var newName = ""
+    @State private var renaming: GymProfile?
+    @State private var renameText = ""
 
     private var active: GymProfile? { gyms.first(where: \.isActive) ?? gyms.first }
 
@@ -32,6 +34,9 @@ struct GymsView: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityAddTraits(gym == active ? .isSelected : [])
+                        .contextMenu {
+                            Button("Rename", systemImage: "pencil") { startRename(gym) }
+                        }
                     }
                 }
 
@@ -39,6 +44,9 @@ struct GymsView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
                             SectionLabel("At \(gym.name)")
+                            Button("Rename", systemImage: "pencil") { startRename(gym) }
+                                .labelStyle(.iconOnly).font(.system(size: 14))
+                                .frame(minWidth: 44, minHeight: 44)
                             Spacer()
                             Text("\(gym.equipment.count) OF \(Equipment.allCases.count)").font(Theme.mono(12)).foregroundStyle(Theme.muted)
                         }
@@ -77,6 +85,27 @@ struct GymsView: View {
             Button("Add") { addGym() }
             Button("Cancel", role: .cancel) { newName = "" }
         }
+        .alert("Rename gym", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("Name", text: $renameText)
+            Button("Save") { rename() }
+            Button("Cancel", role: .cancel) { renaming = nil }
+        }
+    }
+
+    private func startRename(_ gym: GymProfile) {
+        renameText = gym.name
+        renaming = gym
+    }
+
+    private func rename() {
+        guard let gym = renaming else { return }
+        renaming = nil
+        let name = renameText.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty, name != gym.name else { return }
+        let old = gym.name
+        gym.name = name
+        try? ctx.save()
+        coach.renameGym(from: old, to: name, ctx)
     }
 
     private func select(_ gym: GymProfile) {

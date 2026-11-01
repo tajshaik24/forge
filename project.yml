@@ -16,7 +16,7 @@ settings:
   base:
     SWIFT_VERSION: "5.0"
     MARKETING_VERSION: "1.0"
-    CURRENT_PROJECT_VERSION: "2"
+    CURRENT_PROJECT_VERSION: "3"
     DEVELOPMENT_TEAM: "LDUCPMFSMH"
 targets:
   FORGE:
@@ -34,13 +34,17 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDisplayName: FORGE
-        UILaunchScreen: {}
+        # The icon on its own background while the app starts; LaunchView matches it in SwiftUI.
+        UILaunchScreen:
+          UIImageName: LaunchIcon
+          UIColorName: LaunchBackground
+          UIImageRespectsSafeAreaInsets: true
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIBackgroundModes: [remote-notification]
         CKSharingSupported: true
         ITSAppUsesNonExemptEncryption: false   # only Apple's standard encryption; skips the export compliance question
         NSSupportsLiveActivities: true
-        NSHealthShareUsageDescription: "FORGE reads your heart rate, sleep and heart-rate variability to track workouts and adjust today's training volume."
+        NSHealthShareUsageDescription: "FORGE reads your heart rate, sleep, heart-rate variability and steps to track workouts and adjust today's training volume."
         NSHealthUpdateUsageDescription: "FORGE saves your strength workouts, heart rate and active calories to Apple Health so they appear in Fitness."
     settings:
       base:

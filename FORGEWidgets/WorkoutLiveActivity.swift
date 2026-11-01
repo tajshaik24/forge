@@ -18,7 +18,8 @@ struct WorkoutLiveActivity: Widget {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(state.restUntil == nil ? "SET \(state.setNumber)/\(state.totalSets)" : "REST")
                             .font(Theme.label).foregroundStyle(Theme.muted)
-                        Text(state.exercise).font(.system(size: 15, weight: .heavy)).lineLimit(1)
+                        Text(state.exercise).font(.system(size: 15, weight: .heavy))
+                            .lineLimit(2).minimumScaleFactor(0.75)
                     }
                     .padding(.leading, 4)
                 }
@@ -34,7 +35,7 @@ struct WorkoutLiveActivity: Widget {
                                 .tint(Theme.accent)
                         }
                         HStack {
-                            Text(state.nextUp).font(.footnote).foregroundStyle(Theme.muted).lineLimit(1)
+                            Text(state.nextUp).font(.footnote).foregroundStyle(Theme.muted).lineLimit(2)
                             Spacer()
                             if state.restUntil != nil { RestButtons() }
                         }
@@ -68,19 +69,23 @@ private struct LockScreenView: View {
                 Text(state.restUntil == nil ? "SET \(state.setNumber) OF \(state.totalSets)" : "REST")
                     .font(Theme.label).foregroundStyle(Theme.muted)
             }
-            HStack(alignment: .center) {
-                Text(state.exercise).font(Theme.display(24)).foregroundStyle(Theme.text).lineLimit(1)
-                Spacer()
+            // Long names wrap to a second line and shrink a little rather than cut off.
+            HStack(alignment: .center, spacing: 12) {
+                Text(state.exercise).font(Theme.display(24)).foregroundStyle(Theme.text)
+                    .lineLimit(2).minimumScaleFactor(0.7)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 ClockText(state: state, workoutStart: context.attributes.workoutStart)
                     .font(Theme.mono(34)).foregroundStyle(Theme.text)
-                    .frame(maxWidth: 130, alignment: .trailing)
+                    .fixedSize()
             }
             if let started = state.restStarted, let until = state.restUntil {
                 ProgressView(timerInterval: started...until, countsDown: true) { EmptyView() } currentValueLabel: { EmptyView() }
                     .tint(Theme.accent)
             }
             HStack {
-                Text(state.nextUp).font(.footnote).foregroundStyle(Theme.muted).lineLimit(1)
+                Text(state.nextUp).font(.footnote).foregroundStyle(Theme.muted)
+                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                 Spacer()
                 if state.restUntil != nil { RestButtons() }
             }

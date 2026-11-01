@@ -232,8 +232,8 @@ enum ExerciseCatalog {
 
     /// Pulse raisers and mobility drills. Never counted as training volume.
     static let warmUps: [Exercise] = [
-        warmUp("Easy row", .back, [], [.rower], dose: "3 min", general: true, photo: "Rowing_Stationary"),
-        warmUp("Easy bike", .quads, [], [.bike], dose: "3 min", general: true, photo: "Bicycling_Stationary"),
+        warmUp("Easy row", .back, [], [.rower], dose: "2 min", general: true, photo: "Rowing_Stationary"),
+        warmUp("Easy bike", .quads, [], [.bike], dose: "2 min", general: true, photo: "Bicycling_Stationary"),
         warmUp("Jumping jacks", .calves, [], [], [.jumping], dose: "60 s", general: true),
         warmUp("March in place", .quads, [], [], dose: "60 s", general: true),
         warmUp("Arm circles", .shoulders, [.shoulders], dose: "30 s", photo: "Arm_Circles"),

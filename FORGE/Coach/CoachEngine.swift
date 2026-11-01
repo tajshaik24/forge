@@ -6,6 +6,16 @@ struct HealthSnapshot: Codable, Sendable, Hashable {
     var sleepHours: Double?
     var hrv: Double?
     var hrvBaseline: Double?
+    /// Steps so far today, and yesterday's total.
+    var stepsToday: Int?
+    var stepsYesterday: Int?
+
+    /// A long walking day tires the legs: "18,400 steps yesterday, so leg volume is trimmed."
+    var bigStepDay: String? {
+        if let t = stepsToday, t >= 12_000 { return "\(t.formatted()) steps already today, so leg volume is trimmed." }
+        if let y = stepsYesterday, y >= 15_000 { return "\(y.formatted()) steps yesterday, so leg volume is trimmed." }
+        return nil
+    }
 
     var isUnderRecovered: Bool {
         if let s = sleepHours, s < 6.5 { return true }
@@ -214,6 +224,7 @@ enum PlanFinisher {
             guard let canonical = ExerciseCatalog.named(e.name), poolNames.contains(canonical.name),
                   !picked.contains(where: { $0.name == canonical.name }) else { continue }
             e.name = canonical.name
+            // The coach picks the sets; this only keeps them within safe limits for the athlete's experience.
             e.sets = min(max(e.sets, context.experience.setRange.lowerBound), context.experience.setRange.upperBound)
             if e.reps.isEmpty { e.reps = canonical.reps }
             if e.cue?.isEmpty == true { e.cue = nil }
@@ -222,7 +233,7 @@ enum PlanFinisher {
 
         // Top up from the pool if the draft came back thin. About 8 minutes per exercise,
         // after the warm-up has taken its share.
-        let liftingMinutes = context.minutes - (context.warmUps ? 6 : 0)
+        let liftingMinutes = context.minutes - (context.warmUps ? WarmUps.budget / 60 : 0)
         let target = max(4, min(7, liftingMinutes / 8))
         for m in muscles where picked.count < target {
             if let extra = pool.first(where: { $0.primary == m && !picked.map(\.name).contains($0.name) }) {
@@ -269,6 +280,18 @@ enum PlanFinisher {
         }
         if let summary = context.feedbackSummary { why.insert(summary, at: min(1, why.count)) }
 
+        // A big walking day already worked the legs: one set fewer on each leg lift.
+        if context.isToday, let steps = context.health.bigStepDay {
+            let legs: Set<MuscleGroup> = [.quads, .hamstrings, .glutes, .calves]
+            var trimmed = false
+            for i in picked.indices where picked[i].sets > minSets {
+                guard let ex = ExerciseCatalog.named(picked[i].name), legs.contains(ex.primary) else { continue }
+                picked[i].sets -= 1
+                trimmed = true
+            }
+            if trimmed { why.insert(steps, at: min(1, why.count)) }
+        }
+
         // The goal sets the rep range; progressive overload sets weight + reps on every lift you've
         // done before. A weighted lift you haven't done gets "find your weight" test sets.
         let goal = context.trainingGoal
@@ -285,11 +308,22 @@ enum PlanFinisher {
         }
 
         let cautious = context.avoid.contains(.standingHeavy) || context.avoid.contains(.axialLoading)
-        return PlannedWorkout(date: context.date, focus: focus, muscles: muscles, minutes: context.minutes,
-                              reasons: Array(why.prefix(3)), exercises: picked,
-                              restSeconds: cautious ? max(150, RepScheme.rest(for: goal)) : RepScheme.rest(for: goal), gymName: context.gymName, engine: engine,
-                              warmUp: WarmUps.warmUp(for: picked, context: context),
-                              coolDown: WarmUps.coolDown(for: muscles, context: context))
+        var plan = PlannedWorkout(date: context.date, focus: focus, muscles: muscles, minutes: context.minutes,
+                                  reasons: Array(why.prefix(3)), exercises: picked,
+                                  restSeconds: cautious ? max(150, RepScheme.rest(for: goal)) : RepScheme.rest(for: goal), gymName: context.gymName, engine: engine,
+                                  warmUp: WarmUps.warmUp(for: picked, context: context),
+                                  coolDown: WarmUps.coolDown(for: muscles, context: context))
+
+        // The time shown is the whole session, warm-up included. If heavy warm-up sets push it past
+        // the length you asked for, drop the last (smallest) lifts until it fits.
+        var total = plan.estimatedMinutes(unit: context.unit, warmUps: context.warmUps)
+        while total > context.minutes + 3, plan.exercises.count > 3 {
+            plan.exercises.removeLast()
+            plan.warmUp = WarmUps.warmUp(for: plan.exercises, context: context)
+            total = plan.estimatedMinutes(unit: context.unit, warmUps: context.warmUps)
+        }
+        plan.minutes = total
+        return plan
     }
 
     static func restDay(_ context: CoachContext, engine: String) -> PlannedWorkout {

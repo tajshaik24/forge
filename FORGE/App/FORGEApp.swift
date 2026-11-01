@@ -31,6 +31,7 @@ struct RootView: View {
     @Environment(CoachStore.self) private var coach
     @Environment(\.scenePhase) private var scenePhase
     @State private var showSetup = !SyncedSettings.onboarded
+    @State private var launching = true
 
     var body: some View {
         TabView {
@@ -40,7 +41,19 @@ struct RootView: View {
             Tab("History", systemImage: "chart.line.uptrend.xyaxis") { NavigationStack { HistoryView() } }
             Tab("Gyms", systemImage: "dumbbell") { NavigationStack { GymsView() } }
         }
-        .fullScreenCover(isPresented: $showSetup) {
+        .overlay {
+            if launching { LaunchView().transition(.opacity) }
+        }
+        // Keep the launch screen up until today's plan is in (at most 1.5 s), so the first screen
+        // isn't half-empty.
+        .task {
+            for _ in 0..<15 where coach.plan == nil && !showSetup {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            withAnimation(.easeOut(duration: 0.3)) { launching = false }
+        }
+        // First run: setup slides up once the launch screen has faded, not over it.
+        .fullScreenCover(isPresented: Binding(get: { showSetup && !launching }, set: { if !$0 { showSetup = false } })) {
             OnboardingView {
                 showSetup = false
                 Task { await coach.invalidate(ctx) }
@@ -113,5 +126,16 @@ final class SceneDelegate: NSObject, UIWindowSceneDelegate {
         SyncedSettings.crewBeta = true
         Task { @MainActor in await CrewService.shared.accept(metadata) }
         #endif
+    }
+}
+
+/// The app icon on its background, matching the system launch screen so the hand-off is seamless.
+struct LaunchView: View {
+    var body: some View {
+        ZStack {
+            Color("LaunchBackground").ignoresSafeArea()
+            Image("LaunchIcon")
+        }
+        .accessibilityLabel("FORGE is loading")
     }
 }

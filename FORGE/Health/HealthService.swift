@@ -10,7 +10,41 @@ enum HealthService {
         async let sleep = lastNightSleepHours(store)
         async let hrv = hrvToday(store)
         async let baseline = hrvBaseline(store)
-        return await HealthSnapshot(sleepHours: sleep, hrv: hrv, hrvBaseline: baseline)
+        async let today = steps(on: .now, store: store)
+        async let yesterday = steps(on: Calendar.current.date(byAdding: .day, value: -1, to: .now)!, store: store)
+        return await HealthSnapshot(sleepHours: sleep, hrv: hrv, hrvBaseline: baseline,
+                                    stepsToday: today, stepsYesterday: yesterday)
+    }
+
+    // MARK: Steps
+
+    static let stepGoal = 10_000
+
+    /// Total steps on one day (so far, for today). Nil when Health has none, or no access.
+    static func steps(on day: Date, store: HKHealthStore? = nil) async -> Int? {
+        let start = Calendar.current.startOfDay(for: day)
+        let end = Calendar.current.date(byAdding: .day, value: 1, to: start)!
+        let total = await stepBuckets(from: start, to: end, every: DateComponents(day: 1), store: store)
+            .reduce(0) { $0 + $1.steps }
+        return total > 0 ? total : nil
+    }
+
+    /// Steps per interval: per hour for a day's chart, per day for the week. Health merges
+    /// the iPhone's and the Watch's counts so a step is only counted once.
+    static func stepBuckets(from start: Date, to end: Date, every interval: DateComponents,
+                            store: HKHealthStore? = nil) async -> [(start: Date, steps: Int)] {
+        guard HKHealthStore.isHealthDataAvailable() else { return [] }
+        let store = store ?? WorkoutTracker.shared.store
+        let query = HKStatisticsCollectionQueryDescriptor(
+            predicate: .quantitySample(type: HKQuantityType(.stepCount),
+                                       predicate: HKQuery.predicateForSamples(withStart: start, end: end)),
+            options: .cumulativeSum, anchorDate: start, intervalComponents: interval)
+        guard let collection = try? await query.result(for: store) else { return [] }
+        var buckets: [(start: Date, steps: Int)] = []
+        collection.enumerateStatistics(from: start, to: end) { stats, _ in
+            buckets.append((stats.startDate, Int(stats.sumQuantity()?.doubleValue(for: .count()) ?? 0)))
+        }
+        return buckets
     }
 
     private static func lastNightSleepHours(_ store: HKHealthStore) async -> Double? {

@@ -7,7 +7,8 @@ struct TodayView: View {
     @Query(sort: \GymProfile.sortIndex) private var gyms: [GymProfile]
     @Query(sort: \WorkoutSession.date, order: .reverse) private var sessions: [WorkoutSession]
     @Query(sort: \DailyPlan.updatedAt, order: .reverse) private var planRows: [DailyPlan]
-    @State private var showLive = false
+    /// The live workout screen: started here, or opened to join one running on the Watch.
+    @State private var working = false
     /// The day shown below the week strip. Today unless you tap another date.
     @State private var selected = Calendar.current.startOfDay(for: .now)
     private let tracker = WorkoutTracker.shared
@@ -25,12 +26,18 @@ struct TodayView: View {
                 dayCard
                 // Right under the day it acts on.
                 if isTodaySelected, let plan = coach.plan, !plan.isRestDay {
-                    NavigationLink { PlanView() } label: { Text("Start workout") }
+                    Button(tracker.isRunning ? "Resume workout" : "Start workout") { working = true }
                         .buttonStyle(AccentButtonStyle())
+                    NavigationLink { PlanView() } label: {
+                        Text(SyncedSettings.warmUps ? "Full plan with warm-up and cool-down" : "Full plan")
+                            .font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.accentText)
+                            .frame(maxWidth: .infinity)
+                    }
                 } else if !isTodaySelected, selectedDone == nil, let plan = selectedPlan, !plan.isRestDay {
                     NavigationLink { PlanView(day: plan) } label: { Text("View plan") }
                         .buttonStyle(AccentButtonStyle())
                 }
+                if isTodaySelected { StepsCard() }
                 if SyncedSettings.crewBeta { CrewCard() }
                 readiness
                 if let err = coach.errorText {
@@ -43,7 +50,7 @@ struct TodayView: View {
         .background(Theme.ground)
         .refreshable { await coach.loadToday(ctx, force: true) }
         .toolbar(.hidden, for: .navigationBar)
-        .fullScreenCover(isPresented: $showLive) { ActiveWorkoutView() }
+        .fullScreenCover(isPresented: $working) { ActiveWorkoutView() }
     }
 
     // MARK: The selected day
@@ -77,7 +84,11 @@ struct TodayView: View {
         } else if let plan = selectedPlan {
             pickCard(plan)
         } else if isTodaySelected {
-            Card { ProgressView("Your coach is planning today…").tint(Theme.accent) }
+            Card {
+                ProgressView("Your coach is planning today…").tint(Theme.accent)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+            }
         } else {
             Card {
                 HStack {
@@ -101,7 +112,7 @@ struct TodayView: View {
 
     /// A workout started on the Watch is running: open it here to log on either device.
     private var liveCard: some View {
-        Button { showLive = true } label: {
+        Button { working = true } label: {
             HStack(spacing: 12) {
                 Image(systemName: "applewatch.radiowaves.left.and.right").font(.title2).foregroundStyle(Theme.accent)
                 VStack(alignment: .leading, spacing: 2) {
@@ -172,6 +183,16 @@ struct TodayView: View {
                     Text("\(plan.minutes) MIN"); Text("\(plan.exercises.count) MOVES"); Text("\(plan.totalSets) SETS")
                 }
                 .font(Theme.mono(13)).foregroundStyle(Theme.muted)
+                // The workout itself, so you can see it before you start.
+                VStack(spacing: 0) {
+                    ForEach(Array(plan.exercises.enumerated()), id: \.element.id) { i, ex in
+                        if i > 0 { Divider().overlay(Theme.hairline) }
+                        NavigationLink { ExerciseDetailView(name: ex.name, planned: ex) } label: {
+                            ExerciseRow(index: i + 1, exercise: ex)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
             }
             Divider().overlay(Theme.hairline)
             SectionLabel(isTodaySelected ? "Why today" : "Why this day")

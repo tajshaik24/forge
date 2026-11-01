@@ -236,6 +236,15 @@ final class CoachStore {
         refreshToday(ctx)
     }
 
+    /// A gym was renamed: carry the new name onto today's and upcoming plans without rebuilding them.
+    func renameGym(from old: String, to new: String, _ ctx: ModelContext) {
+        for var saved in DataStore.upcomingPlans(in: ctx) where saved.gymName == old {
+            saved.gymName = new
+            DataStore.save(saved, in: ctx)
+        }
+        refreshToday(ctx)
+    }
+
     private func refreshToday(_ ctx: ModelContext) {
         if let today = DataStore.todayPlan(in: ctx)?.plan { plan = today }
     }

@@ -122,16 +122,56 @@ struct WarmUpTests {
     @Test func rampUpClimbsToTheWorkingWeight() {
         let squat = ExerciseCatalog.named("Back squat")!
         let steps = RampUp.steps(for: squat, target: LoadTarget(weight: 225, reps: 5, note: ""), unit: .lb)
-        #expect(steps.map(\.weight) == [115, 160, 190])
+        #expect(steps.map(\.weight) == [90, 135, 180])
         #expect(steps.map(\.reps) == [8, 5, 3])
+        #expect(steps.map(\.rest) == [30, 60, 90])
     }
 
-    @Test func noRampUpForLightOrSmallLifts() {
+    @Test func heavierLiftsGetMoreWarmUpSets() {
+        let squat = ExerciseCatalog.named("Back squat")!
+        func count(_ pounds: Double) -> Int {
+            RampUp.steps(for: squat, target: LoadTarget(weight: pounds, reps: 5, note: ""), unit: .lb).count
+        }
+        #expect(count(65) == 1)
+        #expect(count(135) == 2)
+        #expect(count(225) == 3)
+        #expect(count(315) == 4)
+    }
+
+    @Test func lightAndFocusedLiftsGetOneSet() {
         let squat = ExerciseCatalog.named("Back squat")!
         let curl = ExerciseCatalog.named("Dumbbell curl")!
-        #expect(RampUp.steps(for: squat, target: LoadTarget(weight: 55, reps: 5, note: ""), unit: .lb).isEmpty)
-        #expect(RampUp.steps(for: curl, target: LoadTarget(weight: 30, reps: 10, note: ""), unit: .lb).isEmpty)
+        // Never below the empty bar.
+        #expect(RampUp.steps(for: squat, target: LoadTarget(weight: 55, reps: 5, note: ""), unit: .lb).map(\.weight) == [45])
+        #expect(RampUp.steps(for: curl, target: LoadTarget(weight: 30, reps: 10, note: ""), unit: .lb).map(\.weight) == [15])
+        #expect(RampUp.steps(for: curl, target: LoadTarget(weight: 30, reps: 10, note: ""), unit: .lb, alreadyWarm: true).isEmpty)
+        #expect(RampUp.steps(for: squat, target: LoadTarget(weight: 225, reps: 5, note: ""), unit: .lb, alreadyWarm: true).count == 1)
         #expect(RampUp.steps(for: squat, target: nil, unit: .lb).isEmpty)
+    }
+
+    @Test func workoutTimeIncludesTheWarmUpAndFitsTheSession() {
+        let c = libraryContext(equipment: Set(Equipment.allCases))
+        let plan = PlanFinisher.finish(focus: "Full body", muscles: [.quads, .chest, .back, .hamstrings],
+                                       reasons: [], exercises: planned("Back squat", "Barbell bench press", "Barbell row",
+                                                                       "Barbell Romanian deadlift"),
+                                       context: c, engine: "test")
+        #expect(plan.minutes == plan.estimatedMinutes(unit: .lb, warmUps: true))
+        #expect(plan.minutes > plan.estimatedMinutes(unit: .lb, warmUps: false))
+        #expect(plan.minutes <= c.minutes + 3)
+    }
+
+    @Test func drillsStayWithinFiveMinutesAndTwoPerLift() {
+        let c = libraryContext(equipment: Set(Equipment.allCases))
+        let plan = PlanFinisher.finish(focus: "Full body", muscles: [.quads, .chest, .back, .hamstrings],
+                                       reasons: [], exercises: planned("Back squat", "Barbell bench press", "Barbell row",
+                                                                       "Barbell Romanian deadlift"),
+                                       context: c, engine: "test")
+        let steps = WarmUps.beforeEachLift(plan, unit: .lb)
+        let drills = steps.values.flatMap { $0 }.filter { if case .drill = $0 { true } else { false } }
+        #expect(drills.reduce(0) { $0 + $1.seconds } <= WarmUps.budget)
+        for lift in steps.values {
+            #expect(lift.filter { if case .drill = $0 { true } else { false } }.count <= WarmUps.perLift)
+        }
     }
 }
 

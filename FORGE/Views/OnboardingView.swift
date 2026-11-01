@@ -100,9 +100,9 @@ struct OnboardingView: View {
 
     private var experienceStep: some View {
         VStack(alignment: .leading, spacing: 10) {
-            title("How long have you lifted?", "Sets how many working sets you get per exercise.")
+            title("How long have you lifted?", "Your coach uses this to choose your sets, exercises and how fast to progress.")
             ForEach(Experience.allCases) { e in
-                option(e.label, "\(e.setRange.lowerBound)–\(e.setRange.upperBound) sets per exercise", selected: experience == e) { experience = e }
+                option(e.label, nil, selected: experience == e) { experience = e }
             }
         }
     }
@@ -125,6 +125,7 @@ struct OnboardingView: View {
                 }
             }
             Stepper("Session length: \(minutes) min", value: $minutes, in: 20...120, step: 5)
+            Text("Warm-up included.").font(.system(size: 13)).foregroundStyle(Theme.muted)
             SectionLabel("Weights in")
             Picker("Units", selection: $unit) {
                 ForEach(WeightUnit.allCases) { Text($0 == .lb ? "Pounds (lb)" : "Kilograms (kg)").tag($0) }
@@ -188,8 +189,8 @@ struct SettingsView: View {
         Form {
             Section {
                 Picker("Goal", selection: $goal) { ForEach(TrainingGoal.allCases) { Text($0.rawValue).tag($0) } }
-                Picker("Experience", selection: $experience) { ForEach(Experience.allCases) { Text($0.label).tag($0) } }
-                Stepper("Session length: \(minutes) min", value: $minutes, in: 20...120, step: 5)
+                Picker("Years lifting", selection: $experience) { ForEach(Experience.allCases) { Text($0.label).tag($0) } }
+                Stepper("Session length: \(minutes) min, warm-up included", value: $minutes, in: 20...120, step: 5)
                 Toggle("Warm up before lifting", isOn: $warmUps)
             } header: {
                 Text("Training")

@@ -154,13 +154,23 @@ enum Experience: String, CaseIterable, Codable, Sendable, Identifiable {
 
     var label: String {
         switch self {
-        case .new: "New to lifting"
+        case .new: "Less than a year"
         case .intermediate: "1–3 years"
         case .advanced: "3+ years"
         }
     }
 
-    /// Working sets per exercise the coach may prescribe.
+    /// How the coach hears it.
+    var promptLabel: String {
+        switch self {
+        case .new: "under 1 year of lifting"
+        case .intermediate: "1–3 years of lifting"
+        case .advanced: "3+ years of lifting"
+        }
+    }
+
+    /// Safe limits on the working sets per exercise the coach chooses. Never shown: the coach
+    /// decides the sets, this only stops a beginner getting five.
     var setRange: ClosedRange<Int> {
         switch self {
         case .new: 2...3

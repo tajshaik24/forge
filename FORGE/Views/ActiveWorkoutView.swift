@@ -24,17 +24,20 @@ struct ActiveWorkoutView: View {
     @State private var restStarted: Date?
     @State private var phase: Phase = .lifting
     @State private var confirmCancel = false
+    /// Warm-up steps ticked off, as "exercise#index".
+    @State private var warmedUp: Set<String> = []
 
-    /// Warm-up drills, then the lifts, then an optional cool-down.
-    enum Phase { case warmUp, lifting, coolDown }
+    /// The lifts (each with its own short warm-up), then an optional cool-down.
+    enum Phase { case lifting, coolDown }
 
     private let unit = SyncedSettings.unit
 
     enum Sheet: Identifiable {
-        case form, swap, add, edit(SetEntry)
+        case form, swap, add, edit(SetEntry), guide(String)
         var id: String {
             switch self {
             case .form: "form"
+            case .guide(let name): "guide-\(name)"
             case .swap: "swap"
             case .add: "add"
             case .edit(let s): "edit-\(s.persistentModelID.hashValue)"
@@ -85,11 +88,6 @@ struct ActiveWorkoutView: View {
         Group {
             if let finished {
                 SummaryView(session: finished) { dismiss() }
-            } else if phase == .warmUp, let plan {
-                DrillsView(mode: .warmUp, drills: plan.warmUp, rampFor: exercises.first?.name, ramp: ramp) {
-                    withAnimation { phase = .lifting }
-                    setStarted = .now
-                }
             } else if phase == .coolDown, let plan {
                 DrillsView(mode: .coolDown, drills: plan.coolDown) { finish() }
             } else if let current, let plan {
@@ -100,11 +98,6 @@ struct ActiveWorkoutView: View {
         }
         .background(Theme.ground)
         .task {
-            // Warm up unless it's off, or this is a workout you're coming back to.
-            if SyncedSettings.warmUps, plan?.warmUp.isEmpty == false,
-               !exercises.contains(where: { !logged($0.name).isEmpty }) {
-                phase = .warmUp
-            }
             await RestAlerts.requestPermission()
             await tracker.start(focus: plan?.focus ?? "Workout")
             prefill()
@@ -113,6 +106,8 @@ struct ActiveWorkoutView: View {
             switch which {
             case .form:
                 if let current { NavigationStack { ExerciseDetailView(name: current.name, planned: current) } }
+            case .guide(let name):
+                NavigationStack { ExerciseDetailView(name: name) }
             case .swap:
                 if let current { SwapSheet(current: current, pool: pool) { swap(to: $0) } }
             case .add:
@@ -153,7 +148,18 @@ struct ActiveWorkoutView: View {
         let resting = restUntil.map { $0 > .now } == true
         return .init(exercise: current.name, setNumber: min(setNumber, current.sets), totalSets: current.sets,
                      restStarted: resting ? restStarted : nil, restUntil: resting ? restUntil : nil,
-                     nextUp: nextUp, onWatch: tracker.isMirrored)
+                     nextUp: liveDetail(current, resting: resting), onWatch: tracker.isMirrored)
+    }
+
+    /// The Live Activity's last line, which shouldn't repeat the name above it: the target while
+    /// lifting, what's next while resting.
+    private func liveDetail(_ ex: PlannedExercise, resting: Bool) -> String {
+        if resting {
+            return setNumber <= ex.sets ? "Up next: set \(setNumber) of \(ex.sets)" : nextUp
+        }
+        if let t = ex.target, t.weight > 0 { return "Target \(unit.format(pounds: t.weight)) × \(t.reps)" }
+        if exercises.indices.contains(exerciseIndex + 1) { return "Then \(exercises[exerciseIndex + 1].name)" }
+        return "Last exercise"
     }
 
     /// One scrolling column on a regular iPhone. On iPhone Duo, propped half-open, what you read sits above
@@ -218,6 +224,10 @@ struct ActiveWorkoutView: View {
                 .accessibilityLabel("Exercise options")
             }
 
+            if let catalog = ExerciseCatalog.named(ex.name), catalog.photo != nil {
+                ExercisePhotoPair(exercise: catalog, height: 110)
+            }
+
             if ex.calibrate == true {
                 CalibrationCard(exercise: ex, tests: logged(ex.name), result: calibration(ex, logged(ex.name)),
                                 goal: goal, unit: unit)
@@ -235,6 +245,10 @@ struct ActiveWorkoutView: View {
                     .font(.system(size: 13)).foregroundStyle(Theme.muted)
             }
             if let cue = ex.cue { NoteChip(text: cue) }
+
+            if SyncedSettings.warmUps, logged(ex.name).isEmpty, let steps = warmUpSteps[ex.name] {
+                warmUpCard(ex, steps)
+            }
 
             setStrip(ex)
 
@@ -415,10 +429,62 @@ struct ActiveWorkoutView: View {
         Task { finished = await coach.finishWorkout(ctx) }
     }
 
-    /// Lighter sets before the first lift, from its target weight.
-    private var ramp: [RampUp.Step] {
-        guard let first = exercises.first, let ex = ExerciseCatalog.named(first.name) else { return [] }
-        return RampUp.steps(for: ex, target: first.target, unit: unit)
+    /// Up to two warm-up steps before each lift, five minutes in all.
+    private var warmUpSteps: [String: [WarmUps.Step]] {
+        plan.map { WarmUps.beforeEachLift($0, unit: unit) } ?? [:]
+    }
+
+    /// Shown above the first set of a lift until you log it. Ticking is optional: logging the
+    /// first working set moves on either way.
+    private func warmUpCard(_ ex: PlannedExercise, _ steps: [WarmUps.Step]) -> some View {
+        let seconds = steps.reduce(0) { $0 + $1.seconds }
+        return VStack(alignment: .leading, spacing: 6) {
+            Text("WARM UP FIRST · ABOUT \(max(1, Int((Double(seconds) / 60).rounded()))) MIN")
+                .font(Theme.mono(11)).foregroundStyle(Theme.accentText)
+            ForEach(Array(steps.enumerated()), id: \.offset) { i, step in
+                let key = "\(ex.name)#\(i)"
+                let done = warmedUp.contains(key)
+                HStack(spacing: 10) {
+                    Button {
+                        if done {
+                            warmedUp.remove(key)
+                        } else {
+                            warmedUp.insert(key)
+                            // A short rest after each warm-up set, longer as they get heavier.
+                            if case .ramp(let r) = step { restAfterWarmUp(r.rest, next: ex) }
+                        }
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: done ? "checkmark.circle.fill" : "circle")
+                                .foregroundStyle(done ? Theme.accent : Theme.muted)
+                            switch step {
+                            case .drill(let d):
+                                Text(d.name).font(.system(size: 15, weight: .semibold))
+                                Spacer()
+                                Text(d.reps).font(Theme.mono(13)).foregroundStyle(Theme.muted)
+                            case .ramp(let r):
+                                Text("\(unit.format(pounds: r.weight)) × \(r.reps)").font(Theme.mono(15))
+                                Text("warm-up set").font(.system(size: 12)).foregroundStyle(Theme.muted)
+                                Spacer()
+                                Text("rest \(Dose.label(r.rest))").font(Theme.mono(12)).foregroundStyle(Theme.muted)
+                            }
+                        }
+                        .strikethrough(done, color: Theme.muted)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    if case .drill(let d) = step {
+                        Button { sheet = .guide(d.name) } label: { Image(systemName: "info.circle").foregroundStyle(Theme.muted) }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("How to do \(d.name)")
+                    }
+                }
+                .frame(minHeight: 36)
+            }
+        }
+        .padding(14)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.hairline))
     }
 
     /// Test sets: the suggested next weight at the test reps. Once found: the working weight.
@@ -438,6 +504,13 @@ struct ActiveWorkoutView: View {
             reps = Calibration.testReps(for: catalog)
             rpe = 7
         }
+    }
+
+    private func restAfterWarmUp(_ seconds: Int, next ex: PlannedExercise) {
+        let until = Date().addingTimeInterval(TimeInterval(seconds))
+        restUntil = until
+        scheduleRestAlert(at: until, next: "\(ex.name) warm-up")
+        tracker.shareRest(until: until)
     }
 
     private func extendRest() {

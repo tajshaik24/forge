@@ -72,23 +72,9 @@ struct ExerciseDetailView: View {
         }
     }
 
-    /// Start and finish positions, side by side.
+    /// Start and finish positions, side by side. Tap one to see it full screen.
     private func photos(_ ex: Exercise) -> some View {
-        HStack(spacing: 8) {
-            ForEach([0, 1], id: \.self) { frame in
-                ExercisePhoto(exercise: ex, frame: frame)
-                    .aspectRatio(3 / 2, contentMode: .fit)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .overlay(alignment: .bottomLeading) {
-                        Text(frame == 0 ? "START" : "FINISH").font(Theme.label).tracking(1)
-                            .padding(.horizontal, 8).padding(.vertical, 4)
-                            .background(.black.opacity(0.55), in: Capsule())
-                            .foregroundStyle(.white)
-                            .padding(6)
-                    }
-            }
-        }
-        .accessibilityHidden(true)
+        ExercisePhotoPair(exercise: ex)
     }
 
     private func typeText(_ ex: Exercise) -> String {

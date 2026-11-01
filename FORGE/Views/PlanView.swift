@@ -33,8 +33,8 @@ struct PlanView: View {
                             .padding(.horizontal, 10).padding(.vertical, 6)
                             .background(Theme.surface, in: Capsule())
                     }
-                    if SyncedSettings.warmUps, !plan.warmUp.isEmpty {
-                        drills("Warm-up", plan.warmUp)
+                    if SyncedSettings.warmUps, !usedDrills(plan).isEmpty {
+                        drills("Warm-up · built into the workout", usedDrills(plan))
                     }
                     if !plan.exercises.isEmpty { SectionLabel("Workout") }
                     VStack(spacing: 0) {
@@ -68,6 +68,14 @@ struct PlanView: View {
 }
 
 extension PlanView {
+    /// The drills the workout will actually ask for, in order (the warm-up fits in five minutes).
+    func usedDrills(_ plan: PlannedWorkout) -> [PlannedExercise] {
+        let steps = WarmUps.beforeEachLift(plan, unit: SyncedSettings.unit)
+        return plan.exercises.flatMap { steps[$0.name] ?? [] }.compactMap {
+            if case .drill(let d) = $0 { return d } else { return nil }
+        }
+    }
+
     /// Warm-up or cool-down as a compact list: name and dose, tap for the form guide.
     func drills(_ title: String, _ items: [PlannedExercise]) -> some View {
         VStack(alignment: .leading, spacing: 0) {

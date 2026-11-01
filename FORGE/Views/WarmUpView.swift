@@ -71,11 +71,7 @@ struct DrillsView: View {
         let ex = ExerciseCatalog.named(drill.name)
         let dose = Dose(drill.reps)
         return Card {
-            if let ex, ex.photo != nil {
-                ExercisePhoto(exercise: ex, frame: 1)
-                    .aspectRatio(3 / 2, contentMode: .fit)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-            }
+            if let ex, ex.photo != nil { ExercisePhotoPair(exercise: ex) }
             HStack(alignment: .firstTextBaseline) {
                 Text(drill.name).font(.system(size: 22, weight: .bold))
                 Spacer()
@@ -170,28 +166,4 @@ struct DrillsView: View {
 private struct FormSheetItem: Identifiable {
     let name: String
     var id: String { name }
-}
-
-/// "30 s", "30 s/side", "3 min", "10/side": how long one round takes and how many sides it has.
-struct Dose {
-    /// Nil when it's a rep count.
-    let seconds: Int?
-    let sides: Int
-
-    init(_ text: String) {
-        let lower = text.lowercased()
-        sides = lower.contains("/side") || lower.contains("/leg") || lower.contains("/arm") ? 2 : 1
-        let number = Int(lower.split(whereSeparator: { !$0.isNumber }).first ?? "") ?? 0
-        if lower.contains("min") {
-            seconds = number * 60
-        } else if lower.contains(" s") {
-            seconds = number
-        } else {
-            seconds = nil
-        }
-    }
-
-    static func label(_ seconds: Int) -> String {
-        seconds >= 60 && seconds % 60 == 0 ? "\(seconds / 60) min" : "\(seconds) s"
-    }
 }

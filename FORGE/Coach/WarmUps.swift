@@ -2,20 +2,7 @@ import Foundation
 
 /// Builds the warm-up and cool-down around a day's lifts. Deterministic, so AI and rule-based
 /// plans get the same treatment, and it only picks what the gym and the notes allow.
-enum WarmUps {
-    /// Drills that prepare each movement pattern, best first.
-    private static let drills: [MovementPattern: [String]] = [
-        .squat: ["Bodyweight squat", "Ankle rock", "Hip circle", "Lateral band walk", "Foam roll quads"],
-        .lunge: ["World's greatest stretch", "Hip circle", "Ankle rock", "Lateral band walk"],
-        .hinge: ["Leg swing", "Walking knee hug", "Inchworm", "Cat-cow", "Foam roll hamstrings"],
-        .horizontalPush: ["Arm circles", "Band pass-through", "Band external rotation", "Wall slide"],
-        .verticalPush: ["Wall slide", "Band pass-through", "Band external rotation", "Arm circles"],
-        .horizontalPull: ["Band pass-through", "Open book", "Cat-cow", "Arm circles"],
-        .verticalPull: ["Scapular pull-up", "Band pass-through", "Open book", "Arm circles"],
-        .carry: ["Cat-cow", "Walking knee hug"],
-        .core: ["Cat-cow", "Inchworm"],
-    ]
-
+extension WarmUps {
     /// One pulse raiser, then up to three drills for the day's main patterns.
     static func warmUp(for exercises: [PlannedExercise], context: CoachContext) -> [PlannedExercise] {
         let doable = doable(.warmUp, context)
@@ -59,30 +46,5 @@ enum WarmUps {
     private static func doable(_ kind: ExerciseKind, _ context: CoachContext) -> [Exercise] {
         ExerciseCatalog.available(gym: context.equipment, avoiding: context.avoid,
                                   excluding: context.limitedExercises, kind: kind)
-    }
-}
-
-/// Lighter sets before the first heavy lift, worked out from its target weight.
-enum RampUp {
-    struct Step: Hashable {
-        /// Pounds.
-        let weight: Double
-        let reps: Int
-    }
-
-    /// 50 % × 8, 70 % × 5, 85 % × 3, rounded to the unit's step and never below an empty bar.
-    /// Nothing for light or bodyweight lifts, where the first working set is warm-up enough.
-    static func steps(for exercise: Exercise, target: LoadTarget?, unit: WeightUnit) -> [Step] {
-        guard let target, exercise.isCompound, target.weight > 0 else { return [] }
-        let bar = exercise.equipment.contains(.barbell) ? unit.toPounds(unit == .lb ? 45 : 20) : 0
-        guard target.weight >= max(bar * 1.5, unit.toPounds(unit == .lb ? 50 : 22.5)) else { return [] }
-        var steps: [Step] = []
-        for (share, reps) in [(0.5, 8), (0.7, 5), (0.85, 3)] {
-            let weight = max(bar, unit.toPounds(unit.roundToStep(unit.fromPounds(target.weight * share))))
-            if weight < target.weight, !steps.contains(where: { $0.weight == weight }) {
-                steps.append(Step(weight: weight, reps: reps))
-            }
-        }
-        return steps
     }
 }

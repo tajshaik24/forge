@@ -174,11 +174,12 @@ struct AppleIntelligenceCoach: CoachEngine {
     You are FORGE, a strength coach. Choose the session from the candidate focuses and build it.
     Rules:
     - Prefer the focus whose muscles are most recovered, unless the split says otherwise.
+    - After a long walking day (15,000+ steps), lean away from heavy leg work if the split allows.
     - Call findExercises for each muscle you train. Only use names it returns, copied exactly.
     - Respect every coach note. Never work around a note.
     - A note about specific exercises applies only to those exercises, not to everything for that muscle.
     - Leave cue empty unless it's specific to that exercise. Don't repeat a note as a cue.
-    - Fit the session length: about 8 minutes per exercise.
+    - Fit the session length, warm-up included: about 8 minutes per exercise.
     - Keep reasons short and specific to the numbers you were given.
     """
 
@@ -238,8 +239,8 @@ enum CoachPrompts {   // not "PromptBuilder": that name is a FoundationModels re
     static func plan(_ c: CoachContext) -> String {
         var lines: [String] = []
         let day = c.isToday ? "today" : c.date.formatted(.dateTime.weekday(.wide))
-        lines.append("Planning for \(day). Goal: \(c.goal) (\(RepScheme.summary(for: c.trainingGoal))). Experience: \(c.experience.label). Session length: \(c.minutes) min. Split: \(c.split.label). Gym: \(c.gymName).")
-        lines.append("Use \(c.experience.setRange.lowerBound)-\(c.experience.setRange.upperBound) working sets per exercise.")
+        lines.append("Planning for \(day). Goal: \(c.goal) (\(RepScheme.summary(for: c.trainingGoal))). Experience: \(c.experience.promptLabel). Session length: \(c.minutes) min. Split: \(c.split.label). Gym: \(c.gymName).")
+        lines.append("Choose the working sets for each exercise to suit this experience, the goal and how recovered the muscles are (\(c.experience.setRange.lowerBound)-\(c.experience.setRange.upperBound)).")
         lines.append("Candidate focuses (muscle readiness, 100 = fully recovered):")
         for t in c.rankedTemplates.prefix(4) {
             let detail = t.muscles.map { "\($0.label) \(Int((c.readiness[$0] ?? 1) * 100))" }.joined(separator: ", ")
@@ -252,6 +253,8 @@ enum CoachPrompts {   // not "PromptBuilder": that name is a FoundationModels re
         if let feedback = c.feedbackSummary { lines.append("Feedback: \(feedback)") }
         if c.isToday, let s = c.health.sleepHours { lines.append(String(format: "Sleep last night: %.1f h.", s)) }
         if c.isToday, let h = c.health.hrv, let b = c.health.hrvBaseline { lines.append("HRV \(Int(h)) ms vs baseline \(Int(b)) ms.") }
+        if c.isToday, let s = c.health.stepsYesterday { lines.append("Steps yesterday: \(s).") }
+        if c.isToday, let s = c.health.stepsToday { lines.append("Steps so far today: \(s).") }
         if !c.notes.isEmpty {
             lines.append("Coach notes to respect:")
             for n in c.notes {
