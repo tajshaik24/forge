@@ -205,3 +205,13 @@ struct OwnWorkoutTests {
         #expect(own.minutes == 0)
     }
 }
+
+@Suite("Shared workout messages")
+struct MirrorMessageTests {
+    @Test func warmUpCheckmarksSurviveTheTrip() throws {
+        let keys = [WorkoutTracker.warmUpKey("Back squat", 0), WorkoutTracker.warmUpKey("Back squat", 1)]
+        let sent = MirrorMessage.warmUps(done: keys)
+        #expect(MirrorMessage.decode(try sent.encoded()) == sent)
+        #expect(keys == ["Back squat#0", "Back squat#1"])
+    }
+}

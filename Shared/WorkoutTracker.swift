@@ -38,6 +38,8 @@ final class WorkoutTracker: NSObject {
     private(set) var discarded = false
     /// iPhone: bumps when the Watch ended the shared workout on its own.
     private(set) var remoteFinishCount = 0
+    /// Warm-up steps ticked off this workout on either device, as "exercise#step".
+    private(set) var warmUpsDone: Set<String> = []
 
     struct RestChange: Equatable {
         let until: Date?
@@ -138,6 +140,7 @@ final class WorkoutTracker: NSObject {
         lastTimelineSample = .distantPast
         remoteSets = []
         remoteRest = nil
+        warmUpsDone = []
         remoteResult = nil
         discarded = false
         isRunning = true
@@ -208,6 +211,15 @@ final class WorkoutTracker: NSObject {
     func shareRest(until: Date?) {
         send(.rest(until: until))
     }
+
+    /// Ticks or unticks a warm-up step here and on the other device.
+    func setWarmUp(_ key: String, done: Bool) {
+        if done { warmUpsDone.insert(key) } else { warmUpsDone.remove(key) }
+        send(.warmUps(done: warmUpsDone.sorted()))
+    }
+
+    /// The key for one warm-up step of a lift.
+    nonisolated static func warmUpKey(_ exercise: String, _ step: Int) -> String { "\(exercise)#\(step)" }
 
     func finish() async -> Result? {
         #if os(iOS)
@@ -326,6 +338,8 @@ final class WorkoutTracker: NSObject {
             #if os(watchOS)
             discard()
             #endif
+        case .warmUps(let done):
+            warmUpsDone = Set(done)
         }
     }
 

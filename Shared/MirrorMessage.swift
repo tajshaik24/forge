@@ -11,6 +11,8 @@ enum MirrorMessage: Codable, Sendable, Hashable {
     case finish
     /// iPhone → Watch: throw the workout away.
     case discard
+    /// Every warm-up step ticked off so far, as "exercise#step". Sent whole, so the last one wins.
+    case warmUps(done: [String])
 
     func encoded() throws -> Data { try JSONEncoder().encode(self) }
     static func decode(_ data: Data) -> MirrorMessage? { try? JSONDecoder().decode(MirrorMessage.self, from: data) }

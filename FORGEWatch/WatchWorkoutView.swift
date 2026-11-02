@@ -29,8 +29,6 @@ struct WatchWorkoutView: View {
     @State private var confirmEnd = false
     /// Sets done this workout, per exercise, on either device.
     @State private var logged: [String: [SetDone]] = [:]
-    /// Warm-up steps done (or skipped) per exercise.
-    @State private var warmedUp: [String: Int] = [:]
     @State private var adding = false
 
     enum Page { case controls, log, workout }
@@ -51,8 +49,10 @@ struct WatchWorkoutView: View {
     private func pendingWarmUp(_ ex: PlannedExercise) -> (index: Int, total: Int, step: WarmUps.Step)? {
         guard SyncedSettings.warmUps, logged[ex.name]?.isEmpty != false,
               let steps = warmUpSteps[ex.name] else { return nil }
-        let i = warmedUp[ex.name] ?? 0
-        return i < steps.count ? (i, steps.count, steps[i]) : nil
+        // The first step not ticked off here or on the iPhone.
+        guard let i = steps.indices.first(where: { !tracker.warmUpsDone.contains(WorkoutTracker.warmUpKey(ex.name, $0)) })
+        else { return nil }
+        return (i, steps.count, steps[i])
     }
 
     var body: some View {
@@ -178,10 +178,12 @@ struct WatchWorkoutView: View {
                         .lineLimit(1).minimumScaleFactor(0.7)
                     Text("Warm-up set · rest \(Dose.label(r.rest))").font(.system(size: 12)).foregroundStyle(Theme.muted)
                 }
-                Button("Done") { completeWarmUp(ex, step) }
+                Button("Done") { completeWarmUp(ex, index, step) }
                     .buttonStyle(.borderedProminent)
                 Button("Skip warm-up") {
-                    warmedUp[ex.name] = total
+                    for i in 0..<total where !tracker.warmUpsDone.contains(WorkoutTracker.warmUpKey(ex.name, i)) {
+                        tracker.setWarmUp(WorkoutTracker.warmUpKey(ex.name, i), done: true)
+                    }
                     setStarted = .now
                 }
                 .font(.footnote)
@@ -355,8 +357,8 @@ struct WatchWorkoutView: View {
         advance(ex)
     }
 
-    private func completeWarmUp(_ ex: PlannedExercise, _ step: WarmUps.Step) {
-        warmedUp[ex.name, default: 0] += 1
+    private func completeWarmUp(_ ex: PlannedExercise, _ index: Int, _ step: WarmUps.Step) {
+        tracker.setWarmUp(WorkoutTracker.warmUpKey(ex.name, index), done: true)
         WKInterfaceDevice.current().play(.click)
         if case .ramp(let r) = step {
             let until = Date().addingTimeInterval(TimeInterval(r.rest))

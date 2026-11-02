@@ -24,8 +24,6 @@ struct ActiveWorkoutView: View {
     @State private var restStarted: Date?
     @State private var phase: Phase = .lifting
     @State private var confirmCancel = false
-    /// Warm-up steps ticked off, as "exercise#index".
-    @State private var warmedUp: Set<String> = []
 
     /// The lifts (each with its own short warm-up), then an optional cool-down.
     enum Phase { case lifting, coolDown }
@@ -456,14 +454,14 @@ struct ActiveWorkoutView: View {
             Text("WARM UP FIRST · ABOUT \(max(1, Int((Double(seconds) / 60).rounded()))) MIN")
                 .font(Theme.mono(11)).foregroundStyle(Theme.accentText)
             ForEach(Array(steps.enumerated()), id: \.offset) { i, step in
-                let key = "\(ex.name)#\(i)"
-                let done = warmedUp.contains(key)
+                let key = WorkoutTracker.warmUpKey(ex.name, i)
+                let done = tracker.warmUpsDone.contains(key)
                 HStack(spacing: 10) {
                     Button {
                         if done {
-                            warmedUp.remove(key)
+                            tracker.setWarmUp(key, done: false)
                         } else {
-                            warmedUp.insert(key)
+                            tracker.setWarmUp(key, done: true)
                             // A short rest after each warm-up set, longer as they get heavier.
                             if case .ramp(let r) = step { restAfterWarmUp(r.rest, next: ex) }
                         }
