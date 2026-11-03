@@ -148,11 +148,11 @@ struct WatchVitals: View {
     var body: some View {
         HStack(spacing: 6) {
             if let start = model.startDate {
-                Text(timerInterval: start...Date.distantFuture, countsDown: false)
+                Text(timerInterval: start...start.addingTimeInterval(6 * 3600), countsDown: false)
                     .foregroundStyle(Theme.text)
             }
             HStack(spacing: 2) {
-                Image(systemName: "heart.fill").font(.system(size: 11)).foregroundStyle(Theme.accentText)
+                Image(systemName: "heart.fill").font(.system(size: 11)).foregroundStyle(.red)
                 Text(model.heartRate > 0 ? "\(Int(model.heartRate))" : "--")
             }
         }
