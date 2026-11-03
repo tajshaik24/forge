@@ -312,6 +312,9 @@ enum ExerciseCatalog {
         "Push-up": ["Incline push-up"],
         "Goblet squat": ["Box squat to bench"],
         "Dip": ["Bench dip"],
+        "Hanging leg raise": ["Hanging knee raise"],
+        "Single-leg glute bridge": ["Glute bridge"],
+        "Single-leg calf raise": ["Standing dumbbell calf raise"],
     ]
 
     /// The lift an easier version builds toward ("Band-assisted pull-up" -> "Pull-up").
@@ -319,11 +322,51 @@ enum ExerciseCatalog {
         easierVersions.first { $0.value.contains(name) }?.key
     }
 
-    /// Catalog exercise for a loosely written name: "pull ups", "Pullup", "pull-up".
+    /// Everyday names for catalog lifts ("bench", "dips", "RDL"), matched as whole words after the
+    /// full names, so "goblet squat" stays a goblet squat.
+    static let aliases: [String: String] = [
+        "bench": "Barbell bench press", "bench press": "Barbell bench press",
+        "squat": "Back squat", "deadlift": "Barbell deadlift",
+        "rdl": "Barbell Romanian deadlift", "romanian deadlift": "Barbell Romanian deadlift",
+        "overhead press": "Standing barbell overhead press", "ohp": "Standing barbell overhead press",
+        "military press": "Standing barbell overhead press", "shoulder press": "Standing barbell overhead press",
+        "dip": "Dip", "lunge": "Reverse lunge", "hip thrust": "Barbell hip thrust", "curl": "Dumbbell curl",
+        "row": "Barbell row", "pulldown": "Lat pulldown", "lat pulldown": "Lat pulldown",
+        "leg raise": "Hanging leg raise", "push up": "Push-up", "pull up": "Pull-up", "chin up": "Chin-up",
+    ]
+
+    /// Well-known moves FORGE can't program, so "pistol squat" isn't read as a back squat.
+    static let unknownMoves = ["pistol squat", "muscle up", "muscle-up", "handstand", "front lever", "back lever",
+                               "l-sit", "l sit", "nordic curl", "sissy squat", "hack squat", "zercher", "planche",
+                               "human flag", "dragon flag", "one arm pull", "one-arm pull", "archer push"]
+
+    static func notInLibrary(in text: String) -> [String] {
+        let lower = text.lowercased()
+        return unknownMoves.filter { lower.contains($0) && named($0) == nil }
+    }
+
+    /// What FORGE has that builds toward a move it can't program.
+    static let closestTo: [String: [String]] = [
+        "pistol squat": ["Bulgarian split squat", "Split squat (hand on bench)", "Goblet squat"],
+        "muscle up": ["Pull-up", "Dip"], "muscle-up": ["Pull-up", "Dip"],
+        "handstand": ["Pike push-up", "Standing barbell overhead press"],
+        "front lever": ["Hanging leg raise", "Pull-up"], "back lever": ["Pull-up", "Hanging leg raise"],
+        "l-sit": ["Hanging leg raise", "Dip"], "l sit": ["Hanging leg raise", "Dip"],
+        "nordic curl": ["Lying leg curl", "Single-leg Romanian deadlift"],
+        "sissy squat": ["Leg extension", "Split squat (hand on bench)"], "hack squat": ["Leg press", "Smith machine squat"],
+        "zercher": ["Front squat", "Goblet squat"], "planche": ["Push-up", "Pike push-up"],
+        "human flag": ["Side plank", "Pull-up"], "dragon flag": ["Hanging leg raise", "Reverse crunch"],
+        "one arm pull": ["Pull-up"], "one-arm pull": ["Pull-up"], "archer push": ["Push-up"],
+    ]
+
+    /// Catalog exercise for a loosely written name: "pull ups", "Pullup", "pull-up", "bench".
     static func match(_ text: String) -> Exercise? {
         let key = normalized(text)
         guard !key.isEmpty else { return nil }
-        return all.first { normalized($0.name) == key }
+        if let exact = all.first(where: { normalized($0.name) == key }) { return exact }
+        if let alias = aliases.first(where: { normalized($0.key) == key }) { return named(alias.value) }
+        // "Romanian deadlift" -> the shortest catalog name containing it.
+        return all.filter { normalized($0.name).contains(key) && key.count >= 5 }.min { $0.name.count < $1.name.count }
     }
 
     /// Exercises the athlete says they can't do, want to avoid or that hurt.
@@ -331,7 +374,7 @@ enum ExerciseCatalog {
     static func limited(in text: String) -> [String] {
         let lower = text.lowercased()
         let negative = ["can't", "can’t", "cannot", "unable", "hurt", "pain", "avoid", "hate", "don't like", "don’t like",
-                        "skip", "not able", "struggle", "too hard", "work towards", "work toward", "build up to"]
+                        "skip", "not able", "struggle", "too hard"]
         guard negative.contains(where: lower.contains) else { return [] }
         return mentioned(in: text)
     }
@@ -347,6 +390,18 @@ enum ExerciseCatalog {
                 found.append(ex.name)
                 remaining = remaining.replacingOccurrences(of: key, with: " ")
             }
+        }
+        // Everyday names, as whole words, unless a full name already covers them or they're part of a
+        // move FORGE doesn't have ("pistol squat").
+        var plain = text.lowercased()
+        for move in unknownMoves { plain = plain.replacingOccurrences(of: move, with: " ") }
+        let words = " " + plain.split(whereSeparator: { !$0.isLetter })
+            .map { $0.hasSuffix("s") && !$0.hasSuffix("ss") && $0.count > 2 ? String($0.dropLast()) : String($0) }
+            .joined(separator: " ") + " "
+        for (alias, name) in aliases.sorted(by: { $0.key.count > $1.key.count })
+        where words.contains(" \(alias) ") && !found.contains(name)
+            && !found.contains(where: { normalized($0).contains(normalized(alias)) }) {
+            found.append(name)
         }
         return found
     }

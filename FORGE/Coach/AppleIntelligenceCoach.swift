@@ -77,7 +77,7 @@ enum GenTargetDay: CaseIterable {
 
 @Generable
 struct GeneratedExercise {
-    @Guide(description: "Exact exercise name copied from the findExercises tool output")
+    @Guide(description: "Exact exercise name copied from the candidate list")
     var name: String
     @Guide(description: "Working sets", .range(2...5))
     var sets: Int
@@ -89,63 +89,113 @@ struct GeneratedExercise {
 
 @Generable
 struct GeneratedDayPlan {
-    @Guide(description: "Name of the session focus, copied from the candidate list, e.g. Pull")
-    var focus: String
-    @Guide(description: "Muscle groups this session trains")
-    var muscles: [GenMuscle]
-    @Guide(description: "Two or three reasons for this choice, each under 14 words, citing recovery, schedule or notes", .count(2...3))
+    @Guide(description: "Two or three reasons for this session, each under 14 words, using only the numbers given", .count(2...3))
     var reasons: [String]
-    @Guide(description: "Exercises in order, big compound lifts first", .count(4...7))
+    @Guide(description: "Exercises in order, big compound lifts first, copied exactly from the candidates", .count(4...7))
     var exercises: [GeneratedExercise]
 }
 
 @Generable
+enum GenMessageKind: CaseIterable {
+    /// Asking something: answer it, change nothing.
+    case question
+    /// Can't do something yet, or something hurts or feels wrong.
+    case limitation
+    /// Wants to work up to a lift or get better at one.
+    case goal
+    /// Less or more time, or a different day.
+    case schedule
+    /// A different gym or kit.
+    case equipment
+    /// How training felt: too easy, too hard, enjoyed it.
+    case feedback
+    /// Anything else.
+    case other
+
+    var kind: ChatDecision.Kind {
+        switch self {
+        case .question: .question
+        case .limitation: .limitation
+        case .goal: .goal
+        case .schedule: .schedule
+        case .equipment: .equipment
+        case .feedback: .feedback
+        case .other: .other
+        }
+    }
+}
+
+@Generable
 struct GeneratedReply {
-    @Guide(description: "Reply to the athlete in 1-3 short, practical sentences. If they report dizziness, lightheadedness, chest pain or sharp pain, also suggest checking with a doctor.")
+    @Guide(description: "Your reply in 1-3 short, practical sentences. Answer exactly what they said or asked, using the facts given.")
     var message: String
-    @Guide(description: "Exact names of specific exercises the athlete can't do, wants to avoid, or that hurt, e.g. [\"Pull-up\"]. Empty if the feedback is about movement types in general or is positive.")
+    @Guide(description: "What kind of message this is")
+    var kind: GenMessageKind
+    @Guide(description: "Exercises named in the athlete's message that they can't do, want to avoid, or that hurt. Empty if they named none.")
     var exercises: [String]
-    @Guide(description: "True only if the athlete shared a lasting limitation, preference or feedback that should change future workouts")
+    @Guide(description: "Exercises named in the athlete's message that they want to work up to, learn or get better at. Never one that hurts. Empty if they named none.")
+    var buildToward: [String]
+    @Guide(description: "True only for a lasting limitation or preference in this message that should change future workouts. False for questions, goals, one-off days, time and travel.")
     var shouldRemember: Bool
-    @Guide(description: "If remembering: one rule you will follow, e.g. \"No heavy standing squats; use supported leg movements\". Otherwise empty.")
+    @Guide(description: "If remembering: what the athlete said, as a short rule in your own words, about only what they said. Otherwise empty.")
     var rule: String
     @Guide(description: """
         Movement types to rule out across ALL exercises. Usually empty. Only include a type the athlete's words clearly point to: \
         axialLoading = bar resting on the spine (back squat, front squat); standingHeavy = heavy standing lifts (squat, deadlift), \
-        e.g. for dizziness or balance; overhead = pressing overhead, e.g. for shoulder pain; deepKneeBend = deep squats and lunges, \
-        e.g. for knee pain; jumping = plyometrics; floorTransitions = getting down to and up from the floor. \
-        A problem with one exercise (e.g. can't do pull-ups yet) goes in exercises, not here.
+        for dizziness or balance trouble; overhead = pressing overhead, for shoulder pain; deepKneeBend = deep squats and lunges, \
+        for knee pain; jumping = plyometrics; floorTransitions = getting down to and up from the floor. \
+        A problem with one exercise goes in exercises, not here.
         """)
     var avoid: [GenMovementFlag]
-    @Guide(description: "True if the current plan should be rebuilt because of this message")
-    var replan: Bool
-    @Guide(description: "New session length in minutes if they asked for a shorter or longer workout, otherwise 0")
+    @Guide(description: "True only if they asked to skip training or rest on a day")
+    var restDay: Bool
+    @Guide(description: "Session length in minutes if they gave one or asked for a shorter or longer workout, otherwise 0")
     var minutesToday: Int
     @Guide(description: "Which day the change is about. Use today unless they name another day.")
     var day: GenTargetDay
 }
 
-// MARK: - Tool: the model looks up exercises, already filtered by gym + notes
+// MARK: - Facts about one exercise, for answering questions about it
 
-struct FindExercisesTool: Tool {
-    let name = "findExercises"
-    let description = "Lists exercises the athlete can do right now for one muscle group. Already filtered to their current gym's equipment and their coach notes. Only program exercises returned by this tool."
-
-    let pool: [Exercise]
-
-    @Generable
-    struct Arguments {
-        @Guide(description: "Muscle group to look up")
-        var muscle: GenMuscle
+enum ExerciseFacts {
+    static func facts(about ex: Exercise, _ c: CoachContext) -> String {
+        var lines = ["\(ex.name): \(ex.primary.label.lowercased())\(ex.secondary.isEmpty ? "" : " and " + ex.secondary.map { $0.label.lowercased() }.joined(separator: ", ")), \(ex.reps) reps."]
+        if !ex.equipment.isSubset(of: c.equipment) {
+            lines.append("Not possible at \(c.gymName): needs \(ex.equipment.subtracting(c.equipment).map(\.label).sorted().joined(separator: ", ")).")
+        }
+        if c.limitedExercises.contains(ex.name) { lines.append("A coach note keeps it out of the plan for now.") }
+        let history = c.history[ex.name] ?? []
+        if let last = Progression.lastSession(history) {
+            let sets = last.map { WorkoutSetText.amount($0, unit: c.unit, timed: ex.isTimed) }.joined(separator: ", ")
+            lines.append("Last time: \(sets).")
+            if let t = Progression.target(for: ex, history: history, signal: c.signal, unit: c.unit, goal: c.trainingGoal) {
+                lines.append("Next target: \(t.weight > 0 ? c.unit.format(pounds: t.weight) + " × " : "")\(t.reps)\(ex.isTimed ? " s" : " reps") (\(t.note)).")
+            }
+            if ex.equipment.isEmpty == false, let best = Strength.estimatedMax(from: history) {
+                lines.append("Estimated one-rep max: \(c.unit.format(pounds: best)).")
+            }
+        } else {
+            lines.append("Never logged. \(Calibration.applies(to: ex) ? "The first session uses light test sets to find a starting weight." : "")")
+        }
+        if let goal = c.goals.first(where: { $0.target == ex.name || ($0.ladder?.steps.contains { $0.options.contains(ex.name) } ?? false) }),
+           let ladder = goal.ladder {
+            let steps = ladder.steps.map { $0.options.first ?? "" }
+            let now = goal.exercise(gym: c.equipment, avoiding: c.avoid)?.name ?? steps[min(goal.step, steps.count - 1)]
+            lines.append("Goal: \(goal.label). Current step: \(now), \(goal.passes) of \(SkillGoal.passesToMoveUp) qualifying sessions done. All steps: \(steps.joined(separator: " → ")).")
+        }
+        if let easier = ExerciseCatalog.easierVersions[ex.name] { lines.append("Easier versions: \(easier.joined(separator: ", ")).") }
+        if let harder = ExerciseCatalog.harderVersion(of: ex.name) { lines.append("Builds toward: \(harder).") }
+        let alternatives = c.pool.filter { $0.primary == ex.primary && $0.name != ex.name && $0.kind == .strength }.prefix(4).map(\.name)
+        if !alternatives.isEmpty { lines.append("Alternatives here for \(ex.primary.label.lowercased()): \(alternatives.joined(separator: ", ")).") }
+        return lines.joined(separator: "\n")
     }
+}
 
-    func call(arguments: Arguments) async throws -> String {
-        let muscle = arguments.muscle.muscle
-        let matches = pool.filter { $0.primary == muscle || $0.secondary.contains(muscle) }
-            .sorted { $0.primary == muscle && $1.primary != muscle }
-        guard !matches.isEmpty else { return "No \(muscle.label.lowercased()) exercises available here." }
-        return matches.prefix(8).map { "\($0.name) (\($0.isCompound ? "compound" : "isolation"), \($0.reps) reps)" }
-            .joined(separator: "\n")
+/// "135 lb × 8", "BW × 10", "45 s".
+enum WorkoutSetText {
+    static func amount(_ set: SetRecord, unit: WeightUnit, timed: Bool) -> String {
+        if timed { return "\(set.reps) s" }
+        return set.weight > 0 ? "\(unit.format(pounds: set.weight)) × \(set.reps)" : "\(set.reps) reps"
     }
 }
 
@@ -171,46 +221,47 @@ struct AppleIntelligenceCoach: CoachEngine {
     }
 
     private static let planInstructions = """
-    You are FORGE, a strength coach. Choose the session from the candidate focuses and build it.
+    You are FORGE, a strength coach. Build today's session from the candidate exercises.
     Rules:
-    - Prefer the focus whose muscles are most recovered, unless the split says otherwise.
-    - After a long walking day (15,000+ steps), lean away from heavy leg work if the split allows.
-    - Call findExercises for each muscle you train. Only use names it returns, copied exactly.
+    - Use only candidate names, copied exactly. Cover every muscle listed, big compound lifts first.
     - Respect every coach note. Never work around a note.
-    - A note about specific exercises applies only to those exercises, not to everything for that muscle.
-    - Leave cue empty unless it's specific to that exercise. Don't repeat a note as a cue.
+    - No more than two exercises of the same movement, e.g. two vertical pulls.
     - Fit the session length, warm-up included: about 8 minutes per exercise.
-    - Keep reasons short and specific to the numbers you were given.
+    - Leave cue empty unless it's specific to that exercise. Don't repeat a note as a cue.
+    - Keep reasons short and use only the numbers you were given.
     """
 
     private static let chatInstructions = """
-    You are FORGE, a supportive, concise strength coach in a workout app.
-    The athlete may report how movements feel, limitations, schedule changes or equipment changes.
-    Decide whether it is lasting feedback to remember, which movement types to avoid, and whether to rebuild the plan.
-    You are not a doctor: for symptoms like dizziness, lightheadedness, chest pain or sharp pain, adapt the training and suggest they check with a doctor.
+    You are FORGE, a friendly, concise strength coach inside a workout app, talking with one athlete.
+    - Answer questions directly and specifically, using the facts given.
+    - Use only weights, reps and rest times that appear in the facts. Never invent numbers.
+    - Coach notes are already applied to every plan. Bring one up only if the message is about it.
+    - Don't list the whole plan unless they ask for it.
+    - Lines starting "App:" say what the app is doing about this message. Agree with them, in your own words.
+    - Most lifts are safe when learned light with good form. Be encouraging.
+    - Only if the athlete says they felt dizzy, faint, chest pain or sharp pain, suggest they see a doctor.
     """
 
     func plan(for context: CoachContext) async throws -> PlannedWorkout {
         guard context.isTrainingDay else { return PlanFinisher.restDay(context, engine: displayName) }
 
-        let session = LanguageModelSession(tools: [FindExercisesTool(pool: context.pool)],
-                                           instructions: Self.planInstructions)
-        let response = try await session.respond(to: CoachPrompts.plan(context), generating: GeneratedDayPlan.self)
+        // The rules pick the focus (recovery and split); the model picks lifts from a short list for it.
+        // No tool: tool round trips overflow the small context window, and the list is short anyway.
+        let template = context.rankedTemplates.first ?? .fullBody
+        let session = LanguageModelSession(instructions: Self.planInstructions)
+        let response = try await session.respond(to: CoachPrompts.plan(context, template: template), generating: GeneratedDayPlan.self)
         let draft = response.content
-
         let exercises = draft.exercises.map {
             PlannedExercise(name: $0.name, sets: $0.sets, reps: $0.reps, cue: $0.cue)
         }
-        // Fall back to the template's muscles if the model returned none.
-        let template = context.rankedTemplates.first { $0.name.lowercased() == draft.focus.lowercased() }
-        let modelMuscles = draft.muscles.map(\.muscle)
-        let muscles = modelMuscles.isEmpty ? (template?.muscles ?? []) : modelMuscles
-        return PlanFinisher.finish(focus: template?.name ?? draft.focus, muscles: muscles, reasons: draft.reasons,
+        return PlanFinisher.finish(focus: template.name, muscles: template.muscles, reasons: draft.reasons,
                                    exercises: exercises, context: context, engine: displayName)
     }
 
     func reply(to message: String, context: CoachContext,
                onText: @escaping @MainActor @Sendable (String) -> Void) async throws -> CoachReply {
+        // No tools here: facts about the lifts named in the message go straight into the prompt. A tool
+        // call costs a round trip, and the safety filter rejects many harmless tool transcripts.
         let session = LanguageModelSession(instructions: Self.chatInstructions)
         let prompt = CoachPrompts.chat(message, context)
         // `message` is GeneratedReply's first property, so it streams in before the bookkeeping fields.
@@ -219,42 +270,31 @@ struct AppleIntelligenceCoach: CoachEngine {
             if let text = snapshot.content.message, !text.isEmpty { await onText(text) }
         }
         let out = try await stream.collect().content
-        let named = out.exercises.compactMap { ExerciseCatalog.match($0)?.name }
-        let note = out.shouldRemember
-            ? NoteSnapshot(said: message, rule: out.rule.isEmpty ? message : out.rule, avoid: Set(out.avoid.compactMap(\.flag)),
-                           exercises: Set(named.isEmpty ? ExerciseCatalog.limited(in: message) : named)).checked()
-            : nil
-        // Trust an explicit day name in the message over the model's pick.
-        let target = DayMatcher.date(in: message) ?? out.day.date
-        return CoachReply(message: out.message, note: note,
-                          shouldReplan: out.replan || note != nil,
-                          minutesOverride: out.minutesToday > 0 ? out.minutesToday : nil,
-                          targetDate: target)
+        return ChatDecision.make(message: message, context: context, reply: out.message,
+                                 fields: .init(kind: out.kind.kind, exercises: out.exercises, buildToward: out.buildToward,
+                                               remember: out.shouldRemember, rule: out.rule,
+                                               avoid: Set(out.avoid.compactMap(\.flag)), restDay: out.restDay,
+                                               minutes: out.minutesToday, day: out.day.date))
     }
 }
 
 // MARK: - Prompts: compact, because the on-device context window is small
 
 enum CoachPrompts {   // not "PromptBuilder": that name is a FoundationModels result builder
-    static func plan(_ c: CoachContext) -> String {
+    static func plan(_ c: CoachContext, template: FocusTemplate) -> String {
         var lines: [String] = []
         let day = c.isToday ? "today" : c.date.formatted(.dateTime.weekday(.wide))
-        lines.append("Planning for \(day). Goal: \(c.goal) (\(RepScheme.summary(for: c.trainingGoal))). Experience: \(c.experience.promptLabel). Session length: \(c.minutes) min. Split: \(c.split.label). Gym: \(c.gymName).")
-        lines.append("Choose the working sets for each exercise to suit this experience, the goal and how recovered the muscles are (\(c.experience.setRange.lowerBound)-\(c.experience.setRange.upperBound)).")
-        lines.append("Candidate focuses (muscle readiness, 100 = fully recovered):")
-        for t in c.rankedTemplates.prefix(4) {
-            let detail = t.muscles.map { "\($0.label) \(Int((c.readiness[$0] ?? 1) * 100))" }.joined(separator: ", ")
-            lines.append("- \(t.name): \(detail)")
-        }
-        if !c.recent.isEmpty {
-            let f = DateFormatter(); f.dateFormat = "EEE"
-            lines.append("Recent sessions: " + c.recent.prefix(4).map { "\(f.string(from: $0.date)) \($0.focus)" }.joined(separator: ", "))
+        lines.append("Planning \(template.name) for \(day). Goal: \(c.goal) (\(RepScheme.summary(for: c.trainingGoal))). Experience: \(c.experience.promptLabel). Session length: \(c.minutes) min.")
+        lines.append("Working sets per exercise: \(c.experience.setRange.lowerBound)-\(c.experience.setRange.upperBound), by experience, goal and recovery.")
+        lines.append("Candidates by muscle (readiness, 100 = fully recovered):")
+        for m in template.muscles {
+            let names = PlanFinisher.candidates(for: m, in: template, context: c).prefix(5).map(\.name)
+            guard !names.isEmpty else { continue }
+            lines.append("- \(m.label) \(Int((c.readiness[m] ?? 1) * 100)): \(names.joined(separator: ", "))")
         }
         if let feedback = c.feedbackSummary { lines.append("Feedback: \(feedback)") }
         if c.isToday, let s = c.health.sleepHours { lines.append(String(format: "Sleep last night: %.1f h.", s)) }
         if c.isToday, let h = c.health.hrv, let b = c.health.hrvBaseline { lines.append("HRV \(Int(h)) ms vs baseline \(Int(b)) ms.") }
-        if c.isToday, let s = c.health.stepsYesterday { lines.append("Steps yesterday: \(s).") }
-        if c.isToday, let s = c.health.stepsToday { lines.append("Steps so far today: \(s).") }
         if !c.notes.isEmpty {
             lines.append("Coach notes to respect:")
             for n in c.notes {
@@ -262,8 +302,9 @@ enum CoachPrompts {   // not "PromptBuilder": that name is a FoundationModels re
             }
         }
         for goal in c.goals {
-            if let ex = goal.exercise(gym: c.equipment, avoiding: c.avoid) {
-                lines.append("Skill goal: \(goal.label). The app adds \(ex.name) itself on days that train \(ExerciseCatalog.named(goal.target)?.primary.label.lowercased() ?? "those muscles"); don't add the same lift or another like it.")
+            if let ex = goal.exercise(gym: c.equipment, avoiding: c.avoid),
+               let lift = ExerciseCatalog.named(goal.target), template.muscles.contains(lift.primary) {
+                lines.append("The app adds \(ex.name) first (\(goal.label)). Don't pick it or \(goal.target).")
             }
         }
         lines.append("Build the session.")
@@ -272,21 +313,66 @@ enum CoachPrompts {   // not "PromptBuilder": that name is a FoundationModels re
 
     static func chat(_ message: String, _ c: CoachContext) -> String {
         var lines: [String] = []
+        let lower = message.lowercased()
+        let named = Array(ExerciseCatalog.mentioned(in: message).prefix(3))
+        // The lifts only when the message is about today's workout, so replies don't recite the plan.
+        let aboutToday = !named.isEmpty || ["today", "workout", "plan", "session", "lift", "exercise", "muscle", "why", "rest", "warm"]
+            .contains(where: lower.contains)
         if let p = c.currentPlan, !p.isRestDay {
-            lines.append("Today's plan: \(p.focus) at \(p.gymName) — " + p.exercises.map(\.name).joined(separator: ", ") + ".")
-        }
-        if !c.notes.isEmpty { lines.append("Existing notes: " + c.notes.map(\.rule).joined(separator: "; ")) }
-        // Point the reply at moves the app can actually program.
-        for name in ExerciseCatalog.mentioned(in: message) {
-            if let easier = ExerciseCatalog.easierVersions[name] {
-                lines.append("Easier versions of \(name) in the app: " + easier.joined(separator: ", ") + ".")
+            lines.append("Today's plan: \(p.focus) at \(p.gymName), about \(p.minutes) min, \(p.restSeconds) s rest between sets" + (aboutToday ? ". Lifts:" : ", \(p.exercises.count) lifts."))
+            if aboutToday {
+                for e in p.exercises {
+                    let reps = e.target.map { "\($0.reps)" } ?? e.reps
+                    let weight = e.target.flatMap { $0.weight > 0 ? " at \(c.unit.format(pounds: $0.weight))" : nil } ?? ""
+                    lines.append("- \(e.name): \(e.sets) sets of \(reps)\(weight)" + (e.goal.map { " (\($0))" } ?? ""))
+                }
+                if !p.muscles.isEmpty { lines.append("It trains: \(p.muscles.map { $0.label.lowercased() }.joined(separator: ", ")).") }
+                lines.append("Total: \(p.exercises.count) lifts, \(p.totalSets) working sets.")
             }
+        } else if let p = c.currentPlan, p.isRestDay {
+            lines.append("Today is a rest day.")
         }
-        for goal in c.goals { lines.append("Already building toward: \(goal.label).") }
+        lines.append("Athlete: goal \(c.goal.lowercased()), \(c.experience.promptLabel), training \(c.trainingDaysThisWeek) days a week at \(c.gymName).")
+        // Notes only when the message touches them, so they don't creep into unrelated answers.
+        let relevantNotes = c.notes.filter { note in
+            !note.exercises.isDisjoint(with: named) || ["why", "note", "avoid", "can't", "hurt", "pain", "knee", "back", "shoulder"].contains(where: lower.contains)
+        }
+        if !relevantNotes.isEmpty {
+            lines.append("Coach notes, already applied to every plan: " + relevantNotes.map(\.rule).joined(separator: "; ") + ".")
+        }
+        for goal in c.goals {
+            lines.append("Goal \(goal.target): \(goal.label), \(goal.passes) of \(SkillGoal.passesToMoveUp) sessions done on this step.")
+        }
+        // Facts about the lifts they named, so answers use their real numbers and the app's library.
+        if !named.isEmpty { lines.append("Facts about the exercises they mentioned:") }
+        for name in named { if let ex = ExerciseCatalog.named(name) { lines.append(ExerciseFacts.facts(about: ex, c)) } }
+        for move in ExerciseCatalog.notInLibrary(in: message) {
+            let closest = ExerciseCatalog.closestTo[move] ?? []
+            lines.append("App: \(move) isn't in FORGE's library, so the coach can't program it." + (closest.isEmpty ? "" : " Closest lifts it has: \(closest.joined(separator: ", "))."))
+        }
+        // What the app does on its own, so the reply agrees with it.
+        if !ChatDecision.isQuestion(message), let minutes = ChatDecision.minutes(in: message), minutes != c.minutes {
+            lines.append("App: \(ChatDecision.dayName(message))'s session is being rebuilt to fit \(minutes) min.")
+        }
+        if ChatDecision.isPreference(message) {
+            lines.append("App: this preference is saved to the coach's notes, and upcoming plans will follow it.")
+        }
+        if ChatDecision.asksForRestDay(message) {
+            lines.append("App: \(ChatDecision.dayName(message)) is now a rest day.")
+        }
+        if ChatDecision.gymWords.contains(where: lower.contains) {
+            lines.append("App: to train somewhere else, they pick or add that gym on the Gyms screen, and the plan follows its equipment.")
+        }
+        if ["swap", "replace", "instead of", "substitute", "switch"].contains(where: lower.contains) {
+            lines.append("App: in a workout, the Swap button on an exercise's card replaces it with any lift they search for.")
+        }
         let declined = SyncedSettings.skillGoalsDeclined
         for target in SkillLadder.targets(in: message)
         where !c.goals.contains(where: { $0.target == target }) && !declined.contains(target) {
-            lines.append("The app shows two buttons under your reply: build up to a \(target.lowercased()) step by step, or just swap it out. End by asking which they'd like.")
+            let ladder = SkillLadder.named(target)
+            lines.append(ladder?.isPriority == true
+                ? "The app shows a button under your reply to make \(target) a priority lift. End by asking if they'd like that."
+                : "The app shows a button under your reply to build up to \(target) step by step. End by asking if they'd like that.")
         }
         lines.append("Athlete says: \"\(message)\"")
         return lines.joined(separator: "\n")

@@ -62,7 +62,7 @@ struct CoachNoteTests {
         let plan = PlanFinisher.finish(focus: "Pull", muscles: [.back], reasons: [],
                                        exercises: [PlannedExercise(name: "Lat pulldown", sets: 3, reps: "8-12", cue: cue),
                                                    PlannedExercise(name: "Seated cable row", sets: 3, reps: "10-12", cue: cue),
-                                                   PlannedExercise(name: "One-arm dumbbell row", sets: 3, reps: "8-12", cue: cue),
+                                                   PlannedExercise(name: "Straight-arm pulldown", sets: 3, reps: "12-15", cue: cue),
                                                    PlannedExercise(name: "Chest-supported dumbbell row", sets: 3, reps: "8-12",
                                                                    cue: "Keep your chest on the pad")],
                                        context: context(notes: []), engine: "test")

@@ -21,12 +21,46 @@ struct SkillGoalsTests {
         #expect(SkillLadder.targets(in: "squats hurt my knee").isEmpty)
     }
 
-    @Test func everyLadderStepIsInTheCatalog() {
-        for ladder in SkillLadder.all {
-            #expect(ExerciseCatalog.named(ladder.target) != nil)
-            for step in ladder.steps { for name in step.options { #expect(ExerciseCatalog.named(name) != nil, "\(name)") } }
-            #expect(ladder.steps.last?.options == [ladder.target])
+    @Test func everyStrengthLiftHasALadderEndingInIt() {
+        for ex in ExerciseCatalog.all where ex.kind == .strength && !ex.isTimed {
+            let ladder = SkillLadder.named(ex.name)
+            #expect(ladder != nil, "\(ex.name)")
+            for step in ladder?.steps ?? [] { for name in step.options { #expect(ExerciseCatalog.named(name) != nil, "\(name)") } }
+            #expect(ladder?.steps.last?.options == [ex.name], "\(ex.name)")
+            #expect(ladder?.isPriority == !ex.isBodyweight, "\(ex.name)")
         }
+    }
+
+    @Test func goalsFromAnyWording() {
+        #expect(SkillLadder.targets(in: "how do I get my first pull-up?") == ["Pull-up"])
+        #expect(SkillLadder.targets(in: "I want to get stronger at deadlifts") == ["Barbell deadlift"])
+        #expect(SkillLadder.targets(in: "I'd like to improve my bench") == ["Barbell bench press"])
+        #expect(SkillLadder.targets(in: "I can't do dips yet") == ["Dip"])
+        // Can't do a weighted lift: that's a limitation to work around, not a ladder.
+        #expect(SkillLadder.targets(in: "I can't do back squats").isEmpty)
+        // Pain is never a goal.
+        #expect(SkillLadder.targets(in: "dips hurt my shoulder").isEmpty)
+        #expect(SkillLadder.targets(in: "I want to do pull-ups but they hurt my elbow").isEmpty)
+    }
+
+    @Test func everydayNamesMatch() {
+        #expect(ExerciseCatalog.mentioned(in: "dips hurt my shoulder") == ["Dip"])
+        #expect(ExerciseCatalog.mentioned(in: "goblet squats are fine") == ["Goblet squat"])
+        #expect(ExerciseCatalog.mentioned(in: "bench dips") == ["Bench dip"])
+        #expect(ExerciseCatalog.match("bench")?.name == "Barbell bench press")
+        #expect(ExerciseCatalog.match("Romanian deadlift")?.name == "Barbell Romanian deadlift")
+    }
+
+    @Test func priorityLiftLeadsAndNeverFinishes() {
+        var goal = SkillGoal(target: "Barbell deadlift", started: t0)
+        #expect(goal.label == "Priority lift")
+        var legs = [PlannedExercise(name: "Back squat", sets: 3, reps: "6-10"),
+                    PlannedExercise(name: "Barbell deadlift", sets: 3, reps: "6-10")]
+        _ = SkillGoal.apply([goal], to: &legs, muscles: [.hamstrings, .glutes, .quads], gym: fullGym, avoiding: []) { _ in nil }
+        #expect(legs.map(\.name) == ["Barbell deadlift", "Back squat"])
+        #expect(legs[0].reps == "6-10")
+        let heavy = (0..<3).map { WorkoutProgress.DoneSet(exercise: "Barbell deadlift", weight: 225, reps: 10, rpe: 7, date: day(1).addingTimeInterval(Double($0))) }
+        #expect(goal.record(heavy, on: day(1)) == .unchanged)
     }
 
     @Test func movesUpAfterTwoGoodSessions() {

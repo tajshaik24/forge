@@ -29,14 +29,28 @@ final class SetCoach {
 
     /// The rule's note in a coach's words, or nil if the model is slow, unavailable, or changed a number.
     func reword(_ note: String, lift: String, within seconds: TimeInterval) async -> String? {
-        let prompt = "Lift: \(lift). Say this to the athlete in your own words: \(note)"
+        // The rules write "why: what next" ("Easy at 8 reps: try 160 lb for set 2"). Splitting it keeps the
+        // model from mixing up the set just done with the next one.
+        let parts = note.split(separator: ":", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+        let prompt = parts.count == 2
+            ? """
+              Lift: \(lift).
+              How the last set went: \(parts[0]).
+              The next set: \(parts[1]).
+              In one sentence under 18 words, tell them what to do on the next set, then why. Use the numbers exactly.
+              """
+            : "Lift: \(lift). In one sentence under 18 words, tell them this in your own words: \(note)"
         guard let reply = await ask(prompt, within: seconds) else { return nil }
         return Self.keepsNumbers(reply, of: note) ? reply : nil
     }
 
     /// One sentence on how a lift went, from its sets ("135 lb × 8, Good"). Nil if it can't in time.
     func recap(lift: String, sets: [String], within seconds: TimeInterval) async -> String? {
-        let prompt = "The athlete just finished \(lift): \(sets.joined(separator: "; ")). Give a one-sentence recap without numbers."
+        let prompt = """
+            The athlete just finished \(lift). Sets in order, with how each felt: \(sets.joined(separator: "; ")).
+            In one sentence under 20 words: how it went (effort rising, steady, a tough last set) and one thing \
+            to keep in mind next time. No numbers.
+            """
         guard let reply = await ask(prompt, within: seconds) else { return nil }
         return Self.numbers(in: reply).isEmpty ? reply : nil
     }
@@ -67,9 +81,12 @@ final class SetCoach {
         return trimmed.isEmpty || trimmed.count > 160 ? nil : trimmed
     }
 
-    /// The model may say it differently but must not change the coach's numbers.
+    /// The model may say it differently but must keep every number for the next set (after the colon in
+    /// "Easy at 8 reps: try 140 lb for set 2") and must not add any number of its own.
     nonisolated static func keepsNumbers(_ reply: String, of rule: String) -> Bool {
-        numbers(in: reply) == numbers(in: rule)
+        let said = numbers(in: reply), given = numbers(in: rule)
+        let next = numbers(in: rule.split(separator: ":", maxSplits: 1).last.map(String.init) ?? rule)
+        return Set(said).isSubset(of: Set(given)) && next.allSatisfy { said.contains($0) }
     }
 
     nonisolated static func numbers(in text: String) -> [String] {

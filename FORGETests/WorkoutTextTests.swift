@@ -69,6 +69,9 @@ struct SetCoachTests {
         #expect(SetCoach.keepsNumbers("That looked easy at 8, so go for 140 lb on set 2.", of: rule))
         #expect(!SetCoach.keepsNumbers("Try 145 lb for set 2 after those 8 reps.", of: rule))
         #expect(!SetCoach.keepsNumbers("Go heavier next set.", of: rule))
+        // Leaving out how the last set went is fine; the next set's numbers are what matter.
+        #expect(SetCoach.keepsNumbers("Go for 140 lb on set 2, that one looked easy.", of: rule))
+        #expect(!SetCoach.keepsNumbers("Go for 140 lb on set 3.", of: rule))
     }
 
     @Test func tidiesReplies() {

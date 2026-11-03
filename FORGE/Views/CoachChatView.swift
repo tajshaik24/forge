@@ -291,22 +291,28 @@ private struct GoalOffer: View {
 
     var body: some View {
         let ladder = SkillLadder.named(target)
+        let isPriority = ladder?.isPriority ?? false
+        let canSwap = notes.contains { $0.exercises.contains(target) }
         Card {
-            SectionLabel("Build up to \(ladder?.phrase ?? target.lowercased())?")
-            if let ladder {
+            SectionLabel(isPriority ? "Make \(target.lowercased()) a priority?" : "Build up to \(ladder?.phrase ?? target.lowercased())?")
+            if let ladder, ladder.steps.count > 1 {
                 Text(ladder.steps.compactMap { $0.options.first }.joined(separator: " → "))
                     .font(.system(size: 13)).foregroundStyle(Theme.muted)
                     .fixedSize(horizontal: false, vertical: true)
+            } else if isPriority {
+                Text("It goes first on days that train it, while you're fresh.")
+                    .font(.system(size: 13)).foregroundStyle(Theme.muted)
             }
             HStack(spacing: 8) {
-                Button("Build up to it") { Task { await coach.startGoal(target, ctx) } }
+                Button(isPriority ? "Make it a priority" : "Build up to it") { Task { await coach.startGoal(target, ctx) } }
                     .buttonStyle(AccentButtonStyle())
-                Button("Just swap it out") { coach.declineGoal(target, ctx) }
+                Button(canSwap ? "Just swap it out" : "Not now") { coach.declineGoal(target, ctx) }
                     .buttonStyle(RaisedButtonStyle())
             }
             .font(.system(size: 14, weight: .semibold))
         }
     }
+    @Query private var notes: [CoachNote]
 }
 
 /// One goal's ladder: done steps ticked, the current one highlighted with its sessions so far.

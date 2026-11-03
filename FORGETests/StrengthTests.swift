@@ -62,7 +62,8 @@ struct StrengthTests {
         let c = libraryContext(equipment: Set(Equipment.allCases))
         let plan = PlanFinisher.finish(focus: "Push", muscles: [.chest], reasons: [],
                                        exercises: [PlannedExercise(name: "Barbell bench press", sets: 3, reps: "8"),
-                                                   PlannedExercise(name: "Push-up", sets: 3, reps: "10")],
+                                                   PlannedExercise(name: "Push-up", sets: 3, reps: "10"),
+                                                   PlannedExercise(name: "Dumbbell fly", sets: 3, reps: "12")],
                                        context: c, engine: "test")
         let bench = plan.exercises.first { $0.name == "Barbell bench press" }
         #expect(bench?.calibrate == true)

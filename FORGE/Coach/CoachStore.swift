@@ -372,10 +372,12 @@ final class CoachStore {
 
     /// Lifts in the athlete's message that chat should offer to build up to: there's a ladder, and
     /// it isn't already a goal or something they chose to just swap out.
+    /// Offers from the latest reply. After a relaunch, the words of the last message are used instead.
+    private var lastOffers: (message: String, targets: [String])?
+
     func goalOffers(after message: String) -> [String] {
-        SkillLadder.targets(in: message).filter { t in
-            !goals.contains { $0.target == t } && !declinedGoals.contains(t)
-        }
+        let targets = lastOffers?.message == message ? lastOffers!.targets : SkillLadder.targets(in: message)
+        return targets.filter { t in !goals.contains { $0.target == t } && !declinedGoals.contains(t) }
     }
 
     /// Starts building toward `target`, replans upcoming days, and explains the steps in chat.
@@ -392,12 +394,21 @@ final class CoachStore {
             step.options.compactMap(ExerciseCatalog.named).first { $0.isDoable(with: gym, avoiding: avoid) }?.name.lowercased()
                 ?? step.options[0].lowercased()
         }
-        let first = ladder.steps[0]
-        let entry = ChatEntry(fromUser: false, text: """
-            Let's build up to \(ladder.phrase): \(names.joined(separator: " → ")). You'll start with \(names[0])s on days that \
-            train your \(ExerciseCatalog.named(target)?.primary.label.lowercased() ?? "muscles"). When every set reaches \(first.graduateAt) reps \
-            without feeling Hard, in \(SkillGoal.passesToMoveUp) workouts, you move up a step.
-            """)
+        let muscle = ExerciseCatalog.named(target)?.primary.label.lowercased() ?? "those muscles"
+        let text: String
+        if ladder.isPriority {
+            text = "\(target) is a priority now: it goes first on days that train your \(muscle), while you're fresh. Weights still go up as your sets get easier."
+        } else if ladder.steps.count == 1, let reps = ladder.steps[0].graduateAt {
+            text = "\(target)s go first on days that train your \(muscle). The goal: \(ladder.steps[0].sets) sets of \(reps) without feeling Hard."
+        } else {
+            let reps = ladder.steps[0].graduateAt.map { "\($0)" } ?? "its target"
+            text = """
+                Let's build up to \(ladder.phrase): \(names.joined(separator: " → ")). You'll start with \(names[0])s on days that \
+                train your \(muscle). When every set reaches \(reps) reps without feeling Hard, in \(SkillGoal.passesToMoveUp) workouts, \
+                you move up a step.
+                """
+        }
+        let entry = ChatEntry(fromUser: false, text: text)
         ctx.insert(entry)
         try? ctx.save()
         isReplanning = true
@@ -420,8 +431,12 @@ final class CoachStore {
     func declineGoal(_ target: String, _ ctx: ModelContext) {
         declinedGoals.insert(target)
         SyncedSettings.skillGoalsDeclined = declinedGoals
-        let easier = ExerciseCatalog.easierVersions[target].map { " Easier versions like \($0[0].lowercased()) can still show up." } ?? ""
-        ctx.insert(ChatEntry(fromUser: false, text: "Got it: no \(target.lowercased())s, and I won't push a plan for them.\(easier) Ask any time if you want to build up to one."))
+        // Only a lift you said you can't do is kept out; a lift you just wanted to improve stays as it was.
+        let kept = ((try? ctx.fetch(FetchDescriptor<CoachNote>())) ?? []).contains { $0.exercises.contains(target) }
+        let text = kept
+            ? "Got it: \(target.lowercased())s stay out of your plan. Ask any time if you want to build up to one."
+            : "No problem, your plan stays as it is."
+        ctx.insert(ChatEntry(fromUser: false, text: text))
         try? ctx.save()
     }
 
@@ -510,6 +525,7 @@ final class CoachStore {
             reply = (try? await RuleBasedCoach().reply(to: trimmed, context: context))
                 ?? CoachReply(message: "Sorry, I couldn't process that.", note: nil, shouldReplan: false, minutesOverride: nil)
         }
+        lastOffers = (trimmed, reply.goalOffers)
         // Nothing streamed (built-in coach, or the model failed): type the reply out so it reads the same way.
         if streamingReply == nil { await typeOut(reply.message) }
 
@@ -529,7 +545,10 @@ final class CoachStore {
         if let minutes = reply.minutesOverride { minutesOverrides[DayKey.of(day)] = minutes }
         isReplanning = true
         defer { isReplanning = false }
-        if reply.note != nil && reply.targetDate == nil {
+        if reply.restDay {
+            makeRestDay(day, ctx)
+            entry.replannedDayKey = DayKey.of(day)
+        } else if reply.note != nil && reply.targetDate == nil {
             // A lasting note changes every upcoming plan.
             await invalidate(ctx)
             entry.replannedDayKey = DayKey.of(.now)

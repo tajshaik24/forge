@@ -133,6 +133,10 @@ struct CoachReply: Sendable {
     var minutesOverride: Int?
     /// The day a change applies to (nil = today).
     var targetDate: Date? = nil
+    /// Lifts to offer as goals under the reply ("Build up to a pull-up?").
+    var goalOffers: [String] = []
+    /// Make `targetDate` (or today) a rest day.
+    var restDay = false
 }
 
 enum DayMatcher {
@@ -215,6 +219,21 @@ enum Readiness {
 // MARK: - Shared post-processing: every engine's output passes through here
 
 enum PlanFinisher {
+    /// Lifts that suit a muscle on this kind of day, compound first. A Pull day's shoulder work is the
+    /// back of the shoulder, not pressing; a Push day's is pressing and raises.
+    static func candidates(for muscle: MuscleGroup, in template: FocusTemplate, context: CoachContext) -> [Exercise] {
+        let suited = context.pool.filter { ex in
+            guard ex.primary == muscle else { return false }
+            if template == .pull, muscle == .shoulders { return ex.pattern != .verticalPush && !ex.flags.contains(.overhead) }
+            return true
+        }
+        // Compound first, otherwise catalog order: a stable order keeps plans predictable.
+        return suited.filter(\.isCompound) + suited.filter { !$0.isCompound }
+    }
+
+    /// At most this many lifts of one movement pattern in a session (no five kinds of pull-up).
+    static let perPattern = 2
+
     /// Fixes up a draft so it is always valid: only doable exercises, sensible size,
     /// recovery-based volume trim, and "replaces X" labels.
     static func finish(focus: String, muscles: [MuscleGroup], reasons: [String],
@@ -225,6 +244,8 @@ enum PlanFinisher {
         for var e in exercises {
             guard let canonical = ExerciseCatalog.named(e.name), poolNames.contains(canonical.name),
                   !picked.contains(where: { $0.name == canonical.name }) else { continue }
+            if let pattern = canonical.pattern,
+               picked.filter({ ExerciseCatalog.named($0.name)?.pattern == pattern }).count >= perPattern { continue }
             e.name = canonical.name
             // The coach picks the sets; this only keeps them within safe limits for the athlete's experience.
             e.sets = min(max(e.sets, context.experience.setRange.lowerBound), context.experience.setRange.upperBound)
@@ -237,12 +258,28 @@ enum PlanFinisher {
         // after the warm-up has taken its share.
         let liftingMinutes = context.minutes - (context.warmUps ? WarmUps.budget / 60 : 0)
         let target = max(4, min(7, liftingMinutes / 8))
+        let template = FocusTemplate.all.first { $0.name == focus } ?? FocusTemplate(name: focus, muscles: muscles)
+        func patternFull(_ ex: Exercise) -> Bool {
+            guard let pattern = ex.pattern else { return false }
+            return picked.filter { ExerciseCatalog.named($0.name)?.pattern == pattern }.count >= perPattern
+        }
         for m in muscles where picked.count < target {
-            if let extra = pool.first(where: { $0.primary == m && !picked.map(\.name).contains($0.name) }) {
+            if let extra = candidates(for: m, in: template, context: context)
+                .first(where: { !picked.map(\.name).contains($0.name) && !patternFull($0) }) {
                 picked.append(PlannedExercise(name: extra.name, sets: min(3, context.experience.setRange.upperBound), reps: extra.reps))
             }
         }
         picked = Array(picked.prefix(target))
+        // Every muscle of the day gets a lift: a missing one takes the place of a doubled-up muscle's last lift.
+        for m in muscles where !picked.contains(where: { ExerciseCatalog.named($0.name)?.primary == m }) {
+            guard let extra = candidates(for: m, in: template, context: context)
+                .first(where: { !picked.map(\.name).contains($0.name) && !patternFull($0) }) else { continue }
+            let counts = Dictionary(picked.compactMap { ExerciseCatalog.named($0.name)?.primary }.map { ($0, 1) }, uniquingKeysWith: +)
+            if picked.count >= target, let i = picked.lastIndex(where: { (counts[ExerciseCatalog.named($0.name)?.primary ?? .core] ?? 0) > 1 }) {
+                picked.remove(at: i)
+            }
+            picked.append(PlannedExercise(name: extra.name, sets: min(3, context.experience.setRange.upperBound), reps: extra.reps))
+        }
         picked.sort { (ExerciseCatalog.named($0.name)?.isCompound ?? false) && !(ExerciseCatalog.named($1.name)?.isCompound ?? false) }
 
         // A cue copied onto several exercises is boilerplate (e.g. a note restated), not coaching.
@@ -353,14 +390,13 @@ struct RuleBasedCoach: CoachEngine {
     func plan(for context: CoachContext) async throws -> PlannedWorkout {
         guard context.isTrainingDay else { return PlanFinisher.restDay(context, engine: displayName) }
         let template = context.rankedTemplates.first ?? .fullBody
-        let pool = context.pool
         var drafts: [PlannedExercise] = []
         for m in template.muscles {
-            let options = pool.filter { $0.primary == m }.sorted { $0.isCompound && !$1.isCompound }
+            let options = PlanFinisher.candidates(for: m, in: template, context: context)
             if let first = options.first { drafts.append(PlannedExercise(name: first.name, sets: 3, reps: first.reps)) }
         }
         for m in template.muscles {
-            let options = pool.filter { $0.primary == m && !drafts.map(\.name).contains($0.name) }
+            let options = PlanFinisher.candidates(for: m, in: template, context: context).filter { !drafts.map(\.name).contains($0.name) }
             if let second = options.first { drafts.append(PlannedExercise(name: second.name, sets: 3, reps: second.reps)) }
         }
         let pct = Int(context.readiness(of: template) * 100)
@@ -371,12 +407,26 @@ struct RuleBasedCoach: CoachEngine {
 
     func reply(to message: String, context: CoachContext,
                onText: @escaping @MainActor @Sendable (String) -> Void) async throws -> CoachReply {
-        let goal = SkillLadder.targets(in: message).first.map { t in
-            " Want to build up to your first \(t.lowercased()) step by step, or just swap \(t.lowercased())s out?"
-        } ?? ""
-        return CoachReply(message: "Saved that as a note, and your plan will work around it.\(goal)",
-                   note: NoteSnapshot(said: message, rule: message, avoid: [],
-                                      exercises: Set(ExerciseCatalog.limited(in: message))),
-                   shouldReplan: false, minutesOverride: nil, targetDate: DayMatcher.date(in: message))
+        let offers = SkillLadder.targets(in: message)
+        let limited = ExerciseCatalog.limited(in: message)
+        let lower = message.lowercased().trimmingCharacters(in: .whitespaces)
+        let isQuestion = lower.hasSuffix("?") || ["how ", "what ", "why ", "when ", "should ", "is it ", "can i ", "do i "].contains { lower.hasPrefix($0) }
+        // Wanting to get better at a lift isn't a limitation to remember.
+        let restDay = !isQuestion && ChatDecision.restWords.contains(where: lower.contains) && lower.contains("day")
+        let remember = !isQuestion && !restDay && (offers.isEmpty || !limited.isEmpty)
+        // The built-in coach has no model to answer questions, so it says what it did.
+        var text: String
+        if restDay { text = "Done: that's a rest day now." } else if remember { text = "Saved that as a note, and your plan will work around it." } else { text = "" }
+        if let goal = offers.first, let ladder = SkillLadder.named(goal) {
+            text += (text.isEmpty ? "" : " ") + (ladder.isPriority
+                ? "Want to make the \(goal.lowercased()) a priority? It'll go first on days that train it."
+                : "Want to build up to \(ladder.phrase) step by step\(limited.contains(goal) ? ", or just swap it out" : "")?")
+        } else if isQuestion {
+            text = "The built-in coach can't answer questions. Turn on Apple Intelligence to use the AI Coach."
+        }
+        return CoachReply(message: text,
+                          note: remember ? NoteSnapshot(said: message, rule: message, avoid: [], exercises: Set(limited)) : nil,
+                          shouldReplan: false, minutesOverride: nil,
+                          targetDate: isQuestion ? nil : DayMatcher.date(in: message), goalOffers: offers, restDay: restDay)
     }
 }
