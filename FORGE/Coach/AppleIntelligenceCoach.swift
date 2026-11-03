@@ -261,6 +261,11 @@ enum CoachPrompts {   // not "PromptBuilder": that name is a FoundationModels re
                 lines.append(n.exercises.isEmpty ? "- \(n.rule)" : "- Only about \(n.exercises.sorted().joined(separator: ", ")): \(n.rule)")
             }
         }
+        for goal in c.goals {
+            if let ex = goal.exercise(gym: c.equipment, avoiding: c.avoid) {
+                lines.append("Skill goal: \(goal.label). The app adds \(ex.name) itself on days that train \(ExerciseCatalog.named(goal.target)?.primary.label.lowercased() ?? "those muscles"); don't add the same lift or another like it.")
+            }
+        }
         lines.append("Build the session.")
         return lines.joined(separator: "\n")
     }
@@ -276,6 +281,12 @@ enum CoachPrompts {   // not "PromptBuilder": that name is a FoundationModels re
             if let easier = ExerciseCatalog.easierVersions[name] {
                 lines.append("Easier versions of \(name) in the app: " + easier.joined(separator: ", ") + ".")
             }
+        }
+        for goal in c.goals { lines.append("Already building toward: \(goal.label).") }
+        let declined = SyncedSettings.skillGoalsDeclined
+        for target in SkillLadder.targets(in: message)
+        where !c.goals.contains(where: { $0.target == target }) && !declined.contains(target) {
+            lines.append("The app shows two buttons under your reply: build up to a \(target.lowercased()) step by step, or just swap it out. End by asking which they'd like.")
         }
         lines.append("Athlete says: \"\(message)\"")
         return lines.joined(separator: "\n")

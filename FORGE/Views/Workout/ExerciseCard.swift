@@ -113,6 +113,9 @@ struct ExerciseCard: View {
                                                           timed: timed, unit: unit), lift.exercise.calibrate != true {
                     Text(since).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accentText)
                 }
+                if let goal = lift.exercise.goal {
+                    Label(goal, systemImage: "flag.fill").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.accentText)
+                }
                 if let cue = lift.exercise.cue { NoteChip(text: cue) }
             }
         }

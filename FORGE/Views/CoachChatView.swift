@@ -103,9 +103,18 @@ struct CoachChatView: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Theme.accentText)
                 }
+                if m.persistentModelID == messages.last?.persistentModelID, !coach.isThinking {
+                    ForEach(goalOffers, id: \.self) { GoalOffer(target: $0) }
+                }
             }
             .frame(maxWidth: 330, alignment: .leading)
         }
+    }
+
+    /// Lifts the last thing you said you can't do yet, that the coach can build you up to.
+    private var goalOffers: [String] {
+        guard let said = messages.last(where: \.fromUser) else { return [] }
+        return coach.goalOffers(after: said.text)
     }
 
     private func dayName(_ date: Date) -> String {
@@ -216,6 +225,8 @@ struct CoachNotesView: View {
     @Environment(\.modelContext) private var ctx
     @Environment(CoachStore.self) private var coach
     @Query(sort: \CoachNote.createdAt, order: .reverse) private var notes: [CoachNote]
+    @Query private var gyms: [GymProfile]
+    private var gym: Set<Equipment> { gyms.first(where: \.isActive)?.equipment ?? Set(Equipment.allCases) }
 
     var body: some View {
         List {
@@ -250,6 +261,17 @@ struct CoachNotesView: View {
                     Task { await coach.invalidate(ctx) }
                 }
             }
+            if !coach.goals.isEmpty {
+                Section("Building up to") {
+                    ForEach(coach.goals) { goal in
+                        GoalRow(goal: goal, gym: gym)
+                    }
+                    .onDelete { idx in
+                        let targets = idx.map { coach.goals[$0].target }
+                        Task { for t in targets { await coach.stopGoal(t, ctx) } }
+                    }
+                }
+            }
             Section("Goals") {
                 LabeledContent("Focus", value: SyncedSettings.goal)
                 LabeledContent("Session length", value: "\(SyncedSettings.minutes) min")
@@ -258,5 +280,61 @@ struct CoachNotesView: View {
         .scrollContentBackground(.hidden)
         .background(Theme.ground)
         .navigationTitle("What your coach knows")
+    }
+}
+
+/// "Build up to a pull-up?" with the two ways to train it.
+private struct GoalOffer: View {
+    let target: String
+    @Environment(\.modelContext) private var ctx
+    @Environment(CoachStore.self) private var coach
+
+    var body: some View {
+        let ladder = SkillLadder.named(target)
+        Card {
+            SectionLabel("Build up to \(ladder?.phrase ?? target.lowercased())?")
+            if let ladder {
+                Text(ladder.steps.compactMap { $0.options.first }.joined(separator: " → "))
+                    .font(.system(size: 13)).foregroundStyle(Theme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: 8) {
+                Button("Build up to it") { Task { await coach.startGoal(target, ctx) } }
+                    .buttonStyle(AccentButtonStyle())
+                Button("Just swap it out") { coach.declineGoal(target, ctx) }
+                    .buttonStyle(RaisedButtonStyle())
+            }
+            .font(.system(size: 14, weight: .semibold))
+        }
+    }
+}
+
+/// One goal's ladder: done steps ticked, the current one highlighted with its sessions so far.
+private struct GoalRow: View {
+    let goal: SkillGoal
+    let gym: Set<Equipment>
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(goal.target).font(.system(size: 16, weight: .bold))
+            if let ladder = goal.ladder {
+                ForEach(Array(ladder.steps.enumerated()), id: \.offset) { i, step in
+                    let name = step.options.compactMap(ExerciseCatalog.named).first { $0.equipment.isSubset(of: gym) }?.name ?? step.options[0]
+                    HStack(spacing: 8) {
+                        Image(systemName: i < goal.step ? "checkmark.circle.fill" : i == goal.step ? "circle.inset.filled" : "circle")
+                            .foregroundStyle(i <= goal.step ? Theme.accent : Theme.muted)
+                        Text(name).font(.system(size: 14, weight: i == goal.step ? .semibold : .regular))
+                            .foregroundStyle(i > goal.step ? Theme.muted : Theme.text)
+                        Spacer()
+                        if i == goal.step {
+                            Text("\(step.sets)×\(step.graduateAt) · \(goal.passes)/\(SkillGoal.passesToMoveUp)")
+                                .font(Theme.mono(12)).foregroundStyle(Theme.accentText)
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            }
+        }
+        .padding(.vertical, 4)
     }
 }

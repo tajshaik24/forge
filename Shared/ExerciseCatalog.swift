@@ -32,6 +32,12 @@ struct Exercise: Sendable, Hashable {
     /// Rep target as a range: "8-12" -> 8...12, "10/leg" -> 10...10.
     var repRange: ClosedRange<Int> { RepRange.parse(reps) }
 
+    /// Kit that holds or helps you rather than adding load: pull-up bar, dip station, bench, bands.
+    static let bodyweightKit: Set<Equipment> = [.pullUpBar, .dipStation, .bench, .foamRoller, .bands]
+
+    /// You move your own body: no weight to pick, find or add. An inverted row uses a racked bar as a handle.
+    var isBodyweight: Bool { equipment.subtracting(Self.bodyweightKit).isEmpty || name == "Inverted row" }
+
     /// Done for a time rather than a rep count.
     var isTimed: Bool { reps.contains(" s") || reps.contains("min") }
 
@@ -101,6 +107,8 @@ enum ExerciseCatalog {
            pattern: .verticalPull, level: .intermediate, photo: "Chin-Up"),
         ex("Band-assisted pull-up", .back, [.biceps], [.pullUpBar, .bands], reps: "5-8", compound: true, pattern: .verticalPull),
         ex("Negative pull-up", .back, [.biceps], [.pullUpBar], reps: "3-5", compound: true, pattern: .verticalPull),
+        ex("Band-assisted chin-up", .back, [.biceps], [.pullUpBar, .bands], reps: "5-8", compound: true, pattern: .verticalPull),
+        ex("Negative chin-up", .back, [.biceps], [.pullUpBar], reps: "3-5", compound: true, pattern: .verticalPull),
         ex("Lat pulldown", .back, [.biceps], [.cableStack], reps: "8-12", compound: true,
            pattern: .verticalPull, photo: "Wide-Grip_Lat_Pulldown"),
         ex("Straight-arm pulldown", .back, [], [.cableStack], reps: "12-15", photo: "Straight-Arm_Pulldown"),
@@ -300,6 +308,7 @@ enum ExerciseCatalog {
     /// Easier versions to build toward a lift, logged and progressed as their own exercises.
     static let easierVersions: [String: [String]] = [
         "Pull-up": ["Band-assisted pull-up", "Negative pull-up"],
+        "Chin-up": ["Band-assisted chin-up", "Negative chin-up"],
         "Push-up": ["Incline push-up"],
         "Goblet squat": ["Box squat to bench"],
         "Dip": ["Bench dip"],

@@ -70,6 +70,8 @@ struct CoachContext: Sendable {
     var unit: WeightUnit = .lb
     /// Plans open with a warm-up, which takes a few minutes out of the lifting time.
     var warmUps = true
+    /// Bodyweight lifts being built up to; their current step leads days that train those muscles.
+    var goals: [SkillGoal] = []
 
     var isToday: Bool { Calendar.current.isDateInToday(date) }
 
@@ -302,6 +304,16 @@ enum PlanFinisher {
                                                   signal: context.signal, unit: context.unit, goal: goal)
             picked[i].calibrate = picked[i].target == nil && Calibration.applies(to: ex) ? true : nil
         }
+        // A lift you're building up to: its current step goes first on days that train those muscles.
+        let goalReasons = SkillGoal.apply(context.goals, to: &picked, muscles: muscles,
+                                          gym: context.equipment, avoiding: context.avoid) { ex in
+            Progression.target(for: ex, history: context.history[ex.name] ?? [], signal: context.signal, unit: context.unit)
+        }
+        for i in picked.indices where picked[i].goal != nil && picked[i].target == nil {
+            if let ex = ExerciseCatalog.named(picked[i].name), Calibration.applies(to: ex) { picked[i].calibrate = true }
+        }
+        why.insert(contentsOf: goalReasons, at: 0)
+
         let testing = picked.filter { $0.calibrate == true }.count
         if testing > 0, testing * 2 >= picked.count {
             why.insert("New lifts: First Heat sets find your starting weights.", at: 0)
@@ -359,7 +371,10 @@ struct RuleBasedCoach: CoachEngine {
 
     func reply(to message: String, context: CoachContext,
                onText: @escaping @MainActor @Sendable (String) -> Void) async throws -> CoachReply {
-        CoachReply(message: "Saved that as a note. Turn on the AI Coach to have your plan adapt to it.",
+        let goal = SkillLadder.targets(in: message).first.map { t in
+            " Want to build up to your first \(t.lowercased()) step by step, or just swap \(t.lowercased())s out?"
+        } ?? ""
+        return CoachReply(message: "Saved that as a note, and your plan will work around it.\(goal)",
                    note: NoteSnapshot(said: message, rule: message, avoid: [],
                                       exercises: Set(ExerciseCatalog.limited(in: message))),
                    shouldReplan: false, minutesOverride: nil, targetDate: DayMatcher.date(in: message))

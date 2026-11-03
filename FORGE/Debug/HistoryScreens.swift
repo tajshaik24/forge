@@ -9,6 +9,8 @@ import SwiftData
 ///     summary          the latest past workout      summary-today   today's, with records
 ///     today            Today with a plan            today-done      Today after the workout
 ///     steps            StepsView
+///     coach-offer      chat after "I can't do a pull-up", offering to build up to one
+///     coach-goal       the same after tapping "Build up to it"     coach-notes   the goal's steps
 ///
 /// Long screens: add `-scroll 0.5` or `-scroll bottom` to start scrolled.
 enum HistoryScreens {
@@ -24,6 +26,9 @@ enum HistoryScreens {
         case "today": AnyView(DemoHost(needsPlan: true) { TodayView() })
         case "today-done": AnyView(DemoHost(finishToday: true) { TodayView() })
         case "steps": AnyView(DemoHost { StepsView() })
+        case "coach-offer": AnyView(DemoHost(needsPlan: true) { CoachGoalDemo(start: false) })
+        case "coach-goal": AnyView(DemoHost(needsPlan: true) { CoachGoalDemo(start: true) })
+        case "coach-notes": AnyView(DemoHost(needsPlan: true) { CoachGoalDemo(start: true, notes: true) })
         default: nil
         }
     }
@@ -52,6 +57,27 @@ private struct DemoHost<Content: View>: View {
             HistoryDemo.addExtras(ctx)
             if finishToday, let plan = coach.plan { HistoryDemo.finishToday(plan, ctx) }
             _ = coach.makeContext(ctx)
+            ready = true
+        }
+    }
+}
+
+/// Says "I can't do a pull-up or a chin-up yet" in chat, and optionally starts the pull-up goal.
+private struct CoachGoalDemo: View {
+    let start: Bool
+    var notes = false
+    @Environment(\.modelContext) private var ctx
+    @Environment(CoachStore.self) private var coach
+    @State private var ready = false
+
+    var body: some View {
+        Group {
+            if !ready { ProgressView() } else if notes { CoachNotesView() } else { CoachChatView() }
+        }
+        .task {
+            coach.resetGoalsForDemo()
+            await coach.send("I can't do a pull up or a chin up yet", ctx)
+            if start { await coach.startGoal("Pull-up", ctx) }
             ready = true
         }
     }

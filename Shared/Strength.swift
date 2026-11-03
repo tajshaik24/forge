@@ -6,7 +6,7 @@ enum RepScheme {
     /// Reps per set for this lift and goal. Bodyweight and timed moves keep the catalog's dose,
     /// since you can't change their load.
     static func range(for exercise: Exercise, goal: TrainingGoal) -> ClosedRange<Int> {
-        guard exercise.kind == .strength, !exercise.isTimed, !exercise.equipment.isEmpty else { return exercise.repRange }
+        guard exercise.kind == .strength, !exercise.isTimed, !exercise.isBodyweight else { return exercise.repRange }
         let big = exercise.isCompound
         switch goal {
         case .getStronger: return big ? 3...6 : 6...10
@@ -18,7 +18,7 @@ enum RepScheme {
     }
 
     static func reps(for exercise: Exercise, goal: TrainingGoal) -> String {
-        guard exercise.kind == .strength, !exercise.isTimed, !exercise.equipment.isEmpty else { return exercise.reps }
+        guard exercise.kind == .strength, !exercise.isTimed, !exercise.isBodyweight else { return exercise.reps }
         let r = range(for: exercise, goal: goal)
         return "\(r.lowerBound)-\(r.upperBound)" + (exercise.reps.contains("/") ? "/" + (exercise.reps.split(separator: "/").last ?? "") : "")
     }
@@ -79,7 +79,7 @@ enum Calibration {
 
     /// Needs a weight to find: weighted strength moves only.
     static func applies(to exercise: Exercise) -> Bool {
-        exercise.kind == .strength && !exercise.isTimed && !exercise.equipment.isEmpty
+        exercise.kind == .strength && !exercise.isTimed && !exercise.isBodyweight
     }
 
     /// The next test weight after a set that still felt easy, or nil once it's hard enough.

@@ -117,7 +117,7 @@ final class WatchWorkout {
     var lift: WorkoutProgress.Lift? { progress.lifts.indices.contains(index) ? progress.lifts[index] : nil }
     var catalog: Exercise? { lift.flatMap { ExerciseCatalog.named($0.exercise.name) } }
     var isTimed: Bool { catalog?.isTimed ?? false }
-    var isBodyweight: Bool { catalog.map { $0.equipment.isEmpty } ?? false }
+    var isBodyweight: Bool { catalog.map(\.isBodyweight) ?? false }
     var isAllDone: Bool { progress.isComplete }
     /// The All done screen, unless you went back to a lift from the list.
     var showsAllDone: Bool { isAllDone && !extraSet && !reviewing }

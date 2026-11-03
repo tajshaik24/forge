@@ -35,6 +35,9 @@ final class CoachStore {
     private(set) var isFinishing = false
     /// The coach's plan for today, kept while you do your own workout so cancelling puts it back.
     private var setAside: PlannedWorkout?
+    /// Lifts being built up to, one step at a time (mirrors synced settings so views update).
+    private(set) var goals: [SkillGoal] = SyncedSettings.skillGoals
+    private(set) var declinedGoals: Set<String> = SyncedSettings.skillGoalsDeclined
 
     init() {
         if AppleIntelligenceCoach.isAvailable {
@@ -88,6 +91,7 @@ final class CoachStore {
         context.experience = SyncedSettings.experience
         context.unit = SyncedSettings.unit
         context.warmUps = SyncedSettings.warmUps
+        context.goals = SyncedSettings.skillGoals
         return context
     }
 
@@ -125,6 +129,7 @@ final class CoachStore {
         }
         await planWeek(ctx)
         await replanIfTrainedOffPlan(ctx)
+        await countGoalProgress(ctx)
     }
 
     /// Plans saved before warm-ups existed get them added, without rebuilding the lifts.
@@ -363,6 +368,128 @@ final class CoachStore {
         }
     }
 
+    // MARK: Skill goals ("I can't do a pull-up yet")
+
+    /// Lifts in the athlete's message that chat should offer to build up to: there's a ladder, and
+    /// it isn't already a goal or something they chose to just swap out.
+    func goalOffers(after message: String) -> [String] {
+        SkillLadder.targets(in: message).filter { t in
+            !goals.contains { $0.target == t } && !declinedGoals.contains(t)
+        }
+    }
+
+    /// Starts building toward `target`, replans upcoming days, and explains the steps in chat.
+    func startGoal(_ target: String, _ ctx: ModelContext) async {
+        guard let ladder = SkillLadder.named(target), !goals.contains(where: { $0.target == target }) else { return }
+        goals.append(SkillGoal(target: target, lastCounted: .now))
+        SyncedSettings.skillGoals = goals
+        declinedGoals.remove(target)
+        SyncedSettings.skillGoalsDeclined = declinedGoals
+
+        let gym = DataStore.activeGym(in: ctx)?.equipment ?? Set(Equipment.allCases)
+        let avoid = makeContext(ctx).avoid
+        let names = ladder.steps.map { step in
+            step.options.compactMap(ExerciseCatalog.named).first { $0.isDoable(with: gym, avoiding: avoid) }?.name.lowercased()
+                ?? step.options[0].lowercased()
+        }
+        let first = ladder.steps[0]
+        let entry = ChatEntry(fromUser: false, text: """
+            Let's build up to \(ladder.phrase): \(names.joined(separator: " → ")). You'll start with \(names[0])s on days that \
+            train your \(ExerciseCatalog.named(target)?.primary.label.lowercased() ?? "muscles"). When every set reaches \(first.graduateAt) reps \
+            without feeling Hard, in \(SkillGoal.passesToMoveUp) workouts, you move up a step.
+            """)
+        ctx.insert(entry)
+        try? ctx.save()
+        isReplanning = true
+        defer { isReplanning = false }
+        await invalidate(ctx)
+        entry.replannedDayKey = firstDay(with: target, ctx).map(DayKey.of)
+        try? ctx.save()
+    }
+
+    #if DEBUG
+    func resetGoalsForDemo() {
+        goals = []
+        declinedGoals = []
+        SyncedSettings.skillGoals = []
+        SyncedSettings.skillGoalsDeclined = []
+    }
+    #endif
+
+    /// Keeps the lift out of the plan without a ladder, and stops offering one.
+    func declineGoal(_ target: String, _ ctx: ModelContext) {
+        declinedGoals.insert(target)
+        SyncedSettings.skillGoalsDeclined = declinedGoals
+        let easier = ExerciseCatalog.easierVersions[target].map { " Easier versions like \($0[0].lowercased()) can still show up." } ?? ""
+        ctx.insert(ChatEntry(fromUser: false, text: "Got it: no \(target.lowercased())s, and I won't push a plan for them.\(easier) Ask any time if you want to build up to one."))
+        try? ctx.save()
+    }
+
+    func stopGoal(_ target: String, _ ctx: ModelContext) async {
+        goals.removeAll { $0.target == target }
+        SyncedSettings.skillGoals = goals
+        await invalidate(ctx)
+    }
+
+    /// The first upcoming plan with a step of this goal in it.
+    private func firstDay(with target: String, _ ctx: ModelContext) -> Date? {
+        guard let ladder = SkillLadder.named(target) else { return nil }
+        let names = Set(ladder.steps.flatMap(\.options))
+        return DataStore.upcomingPlans(in: ctx).sorted { $0.date < $1.date }
+            .first { $0.exercises.contains { names.contains($0.name) && $0.goal != nil } }?.date
+    }
+
+    /// Counts finished workouts toward each goal, moves up a step when one is earned, and says so in chat.
+    func countGoalProgress(_ ctx: ModelContext) async {
+        guard !goals.isEmpty else { return }
+        let finished = ((try? ctx.fetch(FetchDescriptor<WorkoutSession>(
+            predicate: #Predicate { $0.endDate != nil }, sortBy: [SortDescriptor(\.date)]))) ?? [])
+        var updated = goals
+        var changed = false
+        var achieved: [String] = []
+        for i in updated.indices {
+            for session in finished where session.date > (updated[i].lastCounted ?? updated[i].started) {
+                let sets = session.orderedSets.map {
+                    WorkoutProgress.DoneSet(exercise: $0.exercise, weight: $0.weight, reps: $0.reps, rpe: $0.rpe, date: $0.date)
+                }
+                let before = updated[i]
+                let outcome = updated[i].record(sets, on: session.date)
+                if updated[i] != before { changed = true }
+                if let text = message(for: outcome, goal: updated[i]) {
+                    ctx.insert(ChatEntry(fromUser: false, text: text))
+                }
+                if outcome == .achieved { achieved.append(updated[i].target) }
+            }
+        }
+        guard changed else { return }
+        updated.removeAll { achieved.contains($0.target) }
+        let stepsChanged = updated.map(\.step) != goals.filter { !achieved.contains($0.target) }.map(\.step) || !achieved.isEmpty
+        goals = updated
+        SyncedSettings.skillGoals = updated
+        // Done: the lift is no longer something you can't do.
+        for note in (try? ctx.fetch(FetchDescriptor<CoachNote>())) ?? [] where !achieved.isEmpty {
+            let left = note.exercises.filter { !achieved.contains($0) }
+            guard left.count != note.exercises.count else { continue }
+            if left.isEmpty && note.avoid.isEmpty { ctx.delete(note) } else { note.exercises = left }
+        }
+        try? ctx.save()
+        if stepsChanged { await invalidate(ctx) }
+    }
+
+    private func message(for outcome: SkillGoal.Outcome, goal: SkillGoal) -> String? {
+        guard let ladder = goal.ladder else { return nil }
+        switch outcome {
+        case .unchanged, .progress: return nil
+        case .movedUp(let next):
+            let step = ladder.steps[goal.step]
+            return "Step up: \(goal.label.lowercased()). Next is \(next.lowercased()): \(step.sets) sets of \(step.graduateAt) moves you on. It's in your upcoming plans."
+        case .firstRep:
+            return "You did \(ladder.phrase)! Real \(goal.target.lowercased())s are in your plan now. \(ladder.steps.last.map { "\($0.sets) sets of \($0.graduateAt)" } ?? "") and the goal's done."
+        case .achieved:
+            return "Goal reached: \(ladder.steps.last.map { "\($0.sets) sets of \($0.graduateAt)" } ?? "") \(goal.target.lowercased())s. They're a regular part of your training now."
+        }
+    }
+
     // MARK: Chat (saved in SwiftData as ChatEntry, so it syncs and survives relaunch)
 
     func send(_ text: String, _ ctx: ModelContext) async {
@@ -461,7 +588,10 @@ final class CoachStore {
         lastFinished = session
         setAside = nil
         _ = makeContext(ctx)   // readiness now counts this workout
-        Task { await replanIfTrainedOffPlan(ctx) }
+        Task {
+            await replanIfTrainedOffPlan(ctx)
+            await countGoalProgress(ctx)
+        }
         return session
     }
 }

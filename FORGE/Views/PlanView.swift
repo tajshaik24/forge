@@ -72,14 +72,16 @@ struct ExerciseRow: View {
     let exercise: PlannedExercise
 
     private var isTimed: Bool { ExerciseCatalog.named(exercise.name)?.isTimed ?? false }
-    private var isBodyweight: Bool { ExerciseCatalog.named(exercise.name)?.equipment.isEmpty ?? false }
+    private var isBodyweight: Bool { ExerciseCatalog.named(exercise.name)?.isBodyweight ?? false }
 
     var body: some View {
         HStack(spacing: 12) {
             Text(String(format: "%02d", index)).font(Theme.mono(13)).foregroundStyle(Theme.muted).frame(width: 20, alignment: .leading)
             VStack(alignment: .leading, spacing: 3) {
                 Text(exercise.name).font(.system(size: 16, weight: .bold))
-                if exercise.calibrate == true {
+                if let goal = exercise.goal {
+                    Label(goal, systemImage: "flag.fill").font(.system(size: 12)).foregroundStyle(Theme.accentText).lineLimit(1)
+                } else if exercise.calibrate == true {
                     Text("Test sets find your weight").font(.system(size: 12)).foregroundStyle(Theme.accentText).lineLimit(1)
                 } else if let replaced = exercise.replaces {
                     Text("Replaces \(replaced.lowercased())").font(.system(size: 12)).foregroundStyle(Theme.accentText)

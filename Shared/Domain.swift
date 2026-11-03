@@ -248,6 +248,8 @@ struct PlannedExercise: Codable, Sendable, Hashable, Identifiable {
     var target: LoadTarget?
     /// First time on a weighted lift: start with test sets to find your weight.
     var calibrate: Bool? = nil
+    /// A step toward a lift you're building up to: "Step 2 of 4 toward a pull-up".
+    var goal: String? = nil
 }
 
 struct PlannedWorkout: Codable, Sendable, Hashable {
@@ -376,6 +378,21 @@ enum SyncedSettings {
         set { kv.set(newValue, forKey: "goal"); kv.synchronize() }
     }
 
+    /// Bodyweight lifts you're building up to, one easier step at a time.
+    static var skillGoals: [SkillGoal] {
+        get {
+            guard let data = kv.data(forKey: "skillGoals") else { return [] }
+            return (try? JSONDecoder().decode([SkillGoal].self, from: data)) ?? []
+        }
+        set { kv.set(try? JSONEncoder().encode(newValue), forKey: "skillGoals"); kv.synchronize() }
+    }
+
+    /// Lifts the athlete chose to just swap out rather than build toward, so chat doesn't keep asking.
+    static var skillGoalsDeclined: Set<String> {
+        get { Set((kv.array(forKey: "skillGoalsDeclined") as? [String]) ?? []) }
+        set { kv.set(Array(newValue).sorted(), forKey: "skillGoalsDeclined"); kv.synchronize() }
+    }
+
     static var minutes: Int {
         get { let m = Int(kv.longLong(forKey: "minutes")); return m == 0 ? 45 : m }
         set { kv.set(Int64(newValue), forKey: "minutes"); kv.synchronize() }
@@ -432,6 +449,7 @@ struct LocalSettingsStore {
     func bool(forKey key: String) -> Bool { defaults.bool(forKey: key) }
     func longLong(forKey key: String) -> Int64 { Int64(defaults.integer(forKey: key)) }
     func object(forKey key: String) -> Any? { defaults.object(forKey: key) }
+    func data(forKey key: String) -> Data? { defaults.data(forKey: key) }
     func set(_ value: Any?, forKey key: String) { defaults.set(value, forKey: key) }
     @discardableResult func synchronize() -> Bool { true }
 }

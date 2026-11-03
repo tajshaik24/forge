@@ -20,7 +20,7 @@ enum WorkoutText {
     static func usesWeight(_ ex: Exercise?, target: LoadTarget? = nil) -> Bool {
         if let target, target.weight > 0 { return true }
         guard let ex else { return true }
-        return !ex.equipment.subtracting([.pullUpBar, .dipStation, .bench, .foamRoller, .bands]).isEmpty
+        return !ex.isBodyweight
     }
 
     /// "8 reps", "30 s", "1 min".
