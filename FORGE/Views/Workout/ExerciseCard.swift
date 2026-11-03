@@ -7,7 +7,6 @@ struct ExerciseCard: View {
     let index: Int
     let lift: WorkoutProgress.Lift
     let expanded: Bool
-    let coachName: String
 
     private var name: String { lift.exercise.name }
     private var unit: WeightUnit { model.unit }
@@ -72,8 +71,7 @@ struct ExerciseCard: View {
             title
             actions
             rows
-            CoachLine(text: model.coachLine(lift), coach: lift.isTesting ? "First Heat · \(coachName)" : coachName,
-                      isAI: model.aiNotes.values.contains(model.coachLine(lift)) || model.recaps.values.contains(model.coachLine(lift)))
+            coachLine
             Button { model.addSet(index) } label: {
                 Label("Add set", systemImage: "plus")
                     .font(.system(size: 15, weight: .semibold))
@@ -87,6 +85,15 @@ struct ExerciseCard: View {
         .padding(16)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Theme.accent.opacity(0.55), lineWidth: 1.5))
+    }
+
+    /// Named for whoever wrote the line: the AI Coach only when the on-device model reworded it,
+    /// otherwise the built-in rules, which pick every weight. Same names as the plan on Today.
+    private var coachLine: some View {
+        let text = model.coachLine(lift)
+        let isAI = model.aiNotes.values.contains(text) || model.recaps.values.contains(text)
+        let name = isAI ? "AI Coach" : "Built-in coach"
+        return CoachLine(text: text, coach: lift.isTesting ? "First Heat · \(name)" : name, isAI: isAI)
     }
 
     private var title: some View {

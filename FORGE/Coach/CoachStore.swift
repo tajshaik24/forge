@@ -269,10 +269,14 @@ final class CoachStore {
 
     private func build(_ context: CoachContext) async -> PlannedWorkout? {
         do {
-            return try await engine.plan(for: context)
+            let plan = try await engine.plan(for: context)
+            errorText = nil
+            return plan
         } catch {
             // Model errors (guardrails, context size, not ready) fall back to the rule-based coach.
-            errorText = "Coach fell back to built-in rules: \(error.localizedDescription)"
+            // The system's error text means nothing to a lifter, so say what happened instead.
+            errorText = engine.displayName == RuleBasedCoach().displayName ? nil
+                : "The AI Coach couldn't plan this day, so the built-in coach did. Pull down to try the AI Coach again."
             return try? await RuleBasedCoach().plan(for: context)
         }
     }

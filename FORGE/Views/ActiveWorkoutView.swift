@@ -132,8 +132,7 @@ struct ActiveWorkoutView: View {
                     VStack(spacing: 10) {
                         if plan.exercises.isEmpty { emptyCard }
                         ForEach(Array(progress.lifts.enumerated()), id: \.element.exercise.name) { i, lift in
-                            ExerciseCard(model: model, index: i, lift: lift, expanded: model.focus == i,
-                                         coachName: coach.engine.displayName)
+                            ExerciseCard(model: model, index: i, lift: lift, expanded: model.focus == i)
                                 .id(lift.exercise.name)
                         }
                         if progress.isComplete { completeCard(plan, progress) }
@@ -141,7 +140,7 @@ struct ActiveWorkoutView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
-                    .padding(.bottom, model.isResting ? 96 : 32)
+                    .padding(.bottom, (model.isResting ? 96 : 32) + (model.toast == nil ? 0 : 56))
                     .animation(.snappy, value: model.focus)
                     .animation(.snappy, value: model.setsLogged)
                 }
@@ -156,13 +155,16 @@ struct ActiveWorkoutView: View {
                     }
                 }
             }
-            .overlay(alignment: .top) {
-                if let toast = model.toast { RecordToast(text: toast).transition(.move(edge: .top).combined(with: .opacity)) }
-            }
+            // The record banner sits at the bottom, above the rest bar, so it never covers the lift's name.
             .overlay(alignment: .bottom) {
-                if let until = model.restUntil {
-                    RestBar(until: until, next: model.restNext, extend: model.extendRest, skip: model.skipRest)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                VStack(spacing: 8) {
+                    if let toast = model.toast {
+                        RecordToast(text: toast).transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                    if let until = model.restUntil {
+                        RestBar(until: until, next: model.restNext, extend: model.extendRest, skip: model.skipRest)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                 }
             }
             .animation(.snappy, value: model.restUntil == nil)

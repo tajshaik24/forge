@@ -203,7 +203,7 @@ struct RecordToast: View {
             .background(WorkoutStyle.goldWash, in: Capsule())
             .overlay(Capsule().stroke(WorkoutStyle.goldIcon.opacity(0.4)))
             .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
-            .padding(.top, 10)
+            .padding(.bottom, 4)
             .accessibilityAddTraits(.updatesFrequently)
     }
 }
