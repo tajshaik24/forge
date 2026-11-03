@@ -92,6 +92,9 @@ final class CoachStore {
         context.unit = SyncedSettings.unit
         context.warmUps = SyncedSettings.warmUps
         context.goals = SyncedSettings.skillGoals
+        context.gyms = ((try? ctx.fetch(FetchDescriptor<GymProfile>(sortBy: [SortDescriptor(\.sortIndex)]))) ?? []).map {
+            GymInfo(name: $0.name, detail: $0.detail, equipment: $0.equipment, isActive: $0 == gym)
+        }
         return context
     }
 
@@ -545,7 +548,12 @@ final class CoachStore {
         if let minutes = reply.minutesOverride { minutesOverrides[DayKey.of(day)] = minutes }
         isReplanning = true
         defer { isReplanning = false }
-        if reply.restDay {
+        if let name = reply.switchGym, let target = ((try? ctx.fetch(FetchDescriptor<GymProfile>())) ?? []).first(where: { $0.name == name }) {
+            for g in (try? ctx.fetch(FetchDescriptor<GymProfile>())) ?? [] { g.isActive = (g == target) }
+            try? ctx.save()
+            await invalidate(ctx)
+            entry.replannedDayKey = DayKey.of(.now)
+        } else if reply.restDay {
             makeRestDay(day, ctx)
             entry.replannedDayKey = DayKey.of(day)
         } else if reply.note != nil && reply.targetDate == nil {

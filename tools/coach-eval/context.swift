@@ -8,6 +8,9 @@ enum EvalContext {
                              notes: [NoteSnapshot(said: "My left knee aches on deep squats", rule: "No deep knee bends under load", avoid: [.deepKneeBend])],
                              recent: [], readiness: [:], health: HealthSnapshot(), currentPlan: nil)
         c.goals = [SkillGoal(target: "Pull-up", step: 0, passes: 1)]
+        c.gyms = [GymInfo(name: "Home gym", detail: "Garage · DBs to 50 lb", equipment: [.dumbbells, .bench, .bands], isActive: false),
+                  GymInfo(name: "Commercial gym", detail: "Full equipment", equipment: Set(Equipment.allCases), isActive: true),
+                  GymInfo(name: "Travel", detail: "Hotel gym", equipment: [.dumbbells, .bench], isActive: false)]
         let d = Date.now
         func day(_ n: Int) -> Date { d.addingTimeInterval(Double(-n) * 86_400) }
         c.history = [

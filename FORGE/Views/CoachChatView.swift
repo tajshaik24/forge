@@ -105,6 +105,16 @@ struct CoachChatView: View {
                 }
                 if m.persistentModelID == messages.last?.persistentModelID, !coach.isThinking {
                     ForEach(goalOffers, id: \.self) { GoalOffer(target: $0) }
+                    if m.text.contains("Gyms screen") {
+                        NavigationLink { GymsView() } label: {
+                            Label("Open Gyms", systemImage: "dumbbell")
+                                .font(.system(size: 14, weight: .semibold))
+                                .padding(.horizontal, 14).frame(minHeight: 40)
+                                .background(Theme.surface, in: Capsule())
+                                .overlay(Capsule().stroke(Theme.hairline))
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
             .frame(maxWidth: 330, alignment: .leading)

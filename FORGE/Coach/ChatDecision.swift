@@ -40,6 +40,65 @@ enum ChatDecision {
     static let gymWords = ["hotel", "at home", "home gym", "travel", "traveling", "travelling", "different gym", "new gym",
                            "dumbbells only", "only dumbbells", "just dumbbells", "no barbell", "no equipment"]
 
+    static let laterWords = ["next week", "next month", "tomorrow", "later", "will be", "going to be", "gonna be", "soon", "weekend"]
+
+    /// The athlete's own gym a message says they're at now: "I'm at the hotel gym" -> Travel (its
+    /// description is "Hotel gym"), "working out at home today" -> Home gym. Nil for a future trip.
+    static func gymNow(in text: String, gyms: [GymInfo]) -> GymInfo? {
+        let lower = " " + text.lowercased().replacingOccurrences(of: "’", with: "'") + " "
+        guard !laterWords.contains(where: lower.contains) else { return nil }
+        func keys(_ g: GymInfo) -> [String] {
+            let parts = [g.name] + g.detail.split(whereSeparator: { "·,".contains($0) }).map(String.init)
+            return parts.flatMap { part -> [String] in
+                let p = part.trimmingCharacters(in: .whitespaces).lowercased()
+                return [p, p.replacingOccurrences(of: " gym", with: "")]
+            }.filter { $0.count >= 4 && !["full equipment", "gym"].contains($0) }
+        }
+        let matches = gyms.compactMap { g -> (GymInfo, Int)? in
+            let hit = keys(g).filter { lower.contains(" " + $0) }.map(\.count).max()
+            return hit.map { (g, $0) }
+        }
+        return matches.max { $0.1 < $1.1 }?.0
+    }
+
+    static let todayWords = ["today", "plan", "session", "lift", "exercise", "muscle", "why", "warm", "sets"]
+
+    /// The message is about today's workout, or names a lift: the plan's lifts belong in the reply.
+    static func isAboutToday(_ text: String) -> Bool {
+        let lower = text.lowercased()
+        return !ExerciseCatalog.mentioned(in: text).isEmpty || todayWords.contains(where: lower.contains)
+    }
+
+    /// Drops sentences that recite the plan ("…inverted rows, lat pulldowns, seated cable rows…") from a
+    /// reply to a message that wasn't about it. Small models like to read the prompt back.
+    static func withoutPlanRecital(_ reply: String, plan: PlannedWorkout?, message: String) -> String {
+        guard let plan, !isAboutToday(message) else { return reply }
+        let names = Set(plan.exercises.map(\.name))
+        var sentences: [String] = []
+        var current = ""
+        for ch in reply {
+            current.append(ch)
+            if ".!?".contains(ch) { sentences.append(current); current = "" }
+        }
+        if !current.trimmingCharacters(in: .whitespaces).isEmpty { sentences.append(current) }
+        let kept = sentences.filter { names.intersection(ExerciseCatalog.mentioned(in: $0)).count < 2 }
+        return kept.joined().trimmingCharacters(in: .whitespaces)
+    }
+
+    static func withoutSwitchEcho(_ reply: String) -> String {
+        var sentences: [String] = []
+        var current = ""
+        for ch in reply {
+            current.append(ch)
+            if ".!?".contains(ch) { sentences.append(current); current = "" }
+        }
+        if !current.isEmpty { sentences.append(current) }
+        return sentences.filter { s in
+            let l = s.lowercased()
+            return !(l.contains("switch") || l.contains("rebuilt") || l.contains("same lifts"))
+        }.joined().trimmingCharacters(in: .whitespaces)
+    }
+
     /// "Make Saturday a rest day", "take tomorrow off", "skip today", "no workout Friday".
     static func asksForRestDay(_ text: String) -> Bool {
         let lower = text.lowercased()
@@ -135,13 +194,15 @@ enum ChatDecision {
             // A preference keeps the athlete's own words: a small model can turn "more glute work" into its opposite.
             let rule = symptom ? "No heavy standing lifts or bar on the back after feeling dizzy."
                 : preference && !hurts ? Self.plainPreference(message)
+                // Pain in the athlete's own words: the model's rewrite drifted ("lower back" became "knee bends").
+                : hurts ? message.trimmingCharacters(in: .whitespacesAndNewlines)
                 : (f.rule.isEmpty ? message : f.rule)
             note = NoteSnapshot(said: message, rule: rule, avoid: avoid, exercises: limited).checked()
         }
 
         // Goals: lifts they named and want to work toward, plus any the words make plain. Never one that hurts.
         // A question ("why am I doing inverted rows?") isn't asking for a goal unless its words say so.
-        let heard = hurts || isQuestion ? [] : f.buildToward.compactMap(inMessage)
+        let heard = hurts || isQuestion || !(aspires || cant) ? [] : f.buildToward.compactMap(inMessage)
         let offers = (heard + SkillLadder.targets(in: message)).reduce(into: [String]()) { list, name in
             if SkillLadder.named(name) != nil, !list.contains(name) { list.append(name) }
         }
@@ -152,11 +213,14 @@ enum ChatDecision {
         let minutes = isQuestion ? nil : (saidMinutes ?? modelMinutes).flatMap { (10...180).contains($0) && $0 != context.minutes ? $0 : nil }
         let restDay = !isQuestion && (asksForRestDay(message) || (f.restDay && restWords.contains(where: lower.contains)))
         let namedDay = DayMatcher.date(in: message)
-        let day = isQuestion ? nil : (namedDay ?? ((f.kind == .schedule || restDay) ? f.day : nil))
+        // A day matters only for a change to that day ("sore from Monday" isn't one).
+        let changesADay = restDay || saidMinutes != nil || f.kind == .schedule
+        let day = isQuestion || !changesADay ? nil : (namedDay ?? f.day)
 
         // The app's own changes, confirmed in words the athlete can trust even if the model's wording drifts.
         // Prompt labels never reach the athlete, and an echo of their own words isn't a reply.
-        var reply = reply.replacingOccurrences(of: "App: ", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+        var reply = withoutPlanRecital(reply.replacingOccurrences(of: "App: ", with: ""), plan: context.currentPlan, message: message)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         if reply.isEmpty || reply.lowercased() == message.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) {
             reply = note != nil ? "Got it. Your plan will work around that." : "Got it."
         }
@@ -173,13 +237,23 @@ enum ChatDecision {
             }
             confirm("Saved to your notes, and upcoming plans will follow it.", unless: "notes")
         }
-        if !isQuestion, gymWords.contains(where: lower.contains) {
-            confirm("Pick or add that gym on the Gyms screen and your plan will use its equipment.", unless: "Gyms screen")
+        var switchGym: String?
+        if !isQuestion, let gym = gymNow(in: message, gyms: context.gyms) {
+            if gym.isActive {
+                confirm("You're already set to \(gym.name).", unless: gym.name)
+            } else {
+                switchGym = gym.name
+                // The model tends to parrot the prompt's line about the switch; say it once, plainly.
+                reply = withoutSwitchEcho(reply)
+                confirm("Switched to \(gym.name): today's plan now uses its equipment.", unless: "switched to")
+            }
+        } else if !isQuestion, gymWords.contains(where: lower.contains) {
+            confirm("Pick or add that gym on the Gyms screen, or tell me when you're there, and your plan will use its equipment.", unless: "Gyms screen")
         }
 
         reply = reply.prefix(1).uppercased() + reply.dropFirst()
         return CoachReply(message: reply, note: note,
                           shouldReplan: note != nil || minutes != nil || (f.kind == .schedule && day != nil && !restDay),
-                          minutesOverride: minutes, targetDate: day, goalOffers: offers, restDay: restDay)
+                          minutesOverride: minutes, targetDate: day, goalOffers: offers, restDay: restDay, switchGym: switchGym)
     }
 }

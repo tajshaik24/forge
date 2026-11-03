@@ -29,7 +29,7 @@ struct Eval {
         do {
             let r = try await AppleIntelligenceCoach().reply(to: message, context: EvalContext.make()) { _ in }
             let note = r.note.map { "NOTE ex=\($0.exercises.sorted()) avoid=\($0.avoid.map(\.rawValue).sorted()) rule=\($0.rule)" } ?? "no note"
-            return "[\(i)] >>> \(message)\n    \(r.message)\n    \(note) | replan=\(r.shouldReplan) min=\(r.minutesOverride.map(String.init) ?? "-") day=\(r.targetDate.map { $0.formatted(.dateTime.weekday()) } ?? "today") offers=\(r.goalOffers) rest=\(r.restDay) (\(String(format: "%.1f", Date().timeIntervalSince(start)))s)"
+            return "[\(i)] >>> \(message)\n    \(r.message)\n    \(note) | replan=\(r.shouldReplan) min=\(r.minutesOverride.map(String.init) ?? "-") day=\(r.targetDate.map { $0.formatted(.dateTime.weekday()) } ?? "today") offers=\(r.goalOffers) rest=\(r.restDay) gym=\(r.switchGym ?? "-") (\(String(format: "%.1f", Date().timeIntervalSince(start)))s)"
         } catch {
             return "[\(i)] >>> \(message)\n    ERROR: \(error)"
         }

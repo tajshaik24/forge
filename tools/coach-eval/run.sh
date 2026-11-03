@@ -19,5 +19,5 @@ xcrun swiftc -O -parse-as-library \
   -o "$out" tools/coach-eval/*.swift \
   Shared/Domain.swift Shared/ExerciseCatalog.swift Shared/Progression.swift Shared/Strength.swift \
   Shared/SkillGoals.swift Shared/WorkoutProgress.swift Shared/WarmUpSteps.swift \
-  FORGE/Coach/CoachEngine.swift FORGE/Coach/ChatDecision.swift FORGE/Coach/AppleIntelligenceCoach.swift FORGE/Coach/WarmUps.swift FORGE/Coach/SetCoach.swift
+  FORGE/Coach/CoachEngine.swift FORGE/Coach/ChatDecision.swift FORGE/Coach/CoachKnowledge.swift FORGE/Coach/AppleIntelligenceCoach.swift FORGE/Coach/WarmUps.swift FORGE/Coach/SetCoach.swift
 PAR=${PAR:-3} "$out" "${1:-tools/coach-eval/messages.txt}"

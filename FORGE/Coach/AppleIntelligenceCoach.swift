@@ -258,18 +258,28 @@ struct AppleIntelligenceCoach: CoachEngine {
                                    exercises: exercises, context: context, engine: displayName)
     }
 
-    func reply(to message: String, context: CoachContext,
-               onText: @escaping @MainActor @Sendable (String) -> Void) async throws -> CoachReply {
-        // No tools here: facts about the lifts named in the message go straight into the prompt. A tool
-        // call costs a round trip, and the safety filter rejects many harmless tool transcripts.
+    private func respond(_ prompt: String, onText: @escaping @MainActor @Sendable (String) -> Void) async throws -> GeneratedReply {
         let session = LanguageModelSession(instructions: Self.chatInstructions)
-        let prompt = CoachPrompts.chat(message, context)
         // `message` is GeneratedReply's first property, so it streams in before the bookkeeping fields.
         let stream = session.streamResponse(to: prompt, generating: GeneratedReply.self)
         for try await snapshot in stream {
             if let text = snapshot.content.message, !text.isEmpty { await onText(text) }
         }
-        let out = try await stream.collect().content
+        return try await stream.collect().content
+    }
+
+    func reply(to message: String, context: CoachContext,
+               onText: @escaping @MainActor @Sendable (String) -> Void) async throws -> CoachReply {
+        // No tools here: facts about the lifts named in the message go straight into the prompt. A tool
+        // call costs a round trip, and the safety filter rejects many harmless tool transcripts.
+        // The safety filter is inconsistent: if it blocks the full prompt, try once more with only the
+        // plan, the app's own lines and the message, before the built-in coach takes over.
+        var out: GeneratedReply
+        do {
+            out = try await respond(CoachPrompts.chat(message, context), onText: onText)
+        } catch LanguageModelSession.GenerationError.guardrailViolation {
+            out = try await respond(CoachPrompts.chat(message, context, minimal: true), onText: onText)
+        }
         return ChatDecision.make(message: message, context: context, reply: out.message,
                                  fields: .init(kind: out.kind.kind, exercises: out.exercises, buildToward: out.buildToward,
                                                remember: out.shouldRemember, rule: out.rule,
@@ -311,14 +321,15 @@ enum CoachPrompts {   // not "PromptBuilder": that name is a FoundationModels re
         return lines.joined(separator: "\n")
     }
 
-    static func chat(_ message: String, _ c: CoachContext) -> String {
+    /// - Parameter minimal: only the plan, the app's own lines and the message (a retry after the safety filter).
+    static func chat(_ message: String, _ c: CoachContext, minimal: Bool = false) -> String {
         var lines: [String] = []
         let lower = message.lowercased()
         let named = Array(ExerciseCatalog.mentioned(in: message).prefix(3))
         // The lifts only when the message is about today's workout, so replies don't recite the plan.
-        let aboutToday = !named.isEmpty || ["today", "workout", "plan", "session", "lift", "exercise", "muscle", "why", "rest", "warm"]
-            .contains(where: lower.contains)
-        if let p = c.currentPlan, !p.isRestDay {
+        let switching = !ChatDecision.isQuestion(message) && ChatDecision.gymNow(in: message, gyms: c.gyms).map { !$0.isActive } == true
+        let aboutToday = ChatDecision.isAboutToday(message) && !switching
+        if let p = c.currentPlan, !p.isRestDay, !switching {
             lines.append("Today's plan: \(p.focus) at \(p.gymName), about \(p.minutes) min, \(p.restSeconds) s rest between sets" + (aboutToday ? ". Lifts:" : ", \(p.exercises.count) lifts."))
             if aboutToday {
                 for e in p.exercises {
@@ -337,15 +348,17 @@ enum CoachPrompts {   // not "PromptBuilder": that name is a FoundationModels re
         let relevantNotes = c.notes.filter { note in
             !note.exercises.isDisjoint(with: named) || ["why", "note", "avoid", "can't", "hurt", "pain", "knee", "back", "shoulder"].contains(where: lower.contains)
         }
-        if !relevantNotes.isEmpty {
+        if !relevantNotes.isEmpty, !minimal {
             lines.append("Coach notes, already applied to every plan: " + relevantNotes.map(\.rule).joined(separator: "; ") + ".")
         }
-        for goal in c.goals {
+        for goal in c.goals where !minimal {
             lines.append("Goal \(goal.target): \(goal.label), \(goal.passes) of \(SkillGoal.passesToMoveUp) sessions done on this step.")
         }
         // Facts about the lifts they named, so answers use their real numbers and the app's library.
-        if !named.isEmpty { lines.append("Facts about the exercises they mentioned:") }
-        for name in named { if let ex = ExerciseCatalog.named(name) { lines.append(ExerciseFacts.facts(about: ex, c)) } }
+        if !named.isEmpty, !minimal {
+            lines.append("Facts about the exercises they mentioned:")
+            for name in named { if let ex = ExerciseCatalog.named(name) { lines.append(ExerciseFacts.facts(about: ex, c)) } }
+        }
         for move in ExerciseCatalog.notInLibrary(in: message) {
             let closest = ExerciseCatalog.closestTo[move] ?? []
             lines.append("App: \(move) isn't in FORGE's library, so the coach can't program it." + (closest.isEmpty ? "" : " Closest lifts it has: \(closest.joined(separator: ", "))."))
@@ -360,12 +373,18 @@ enum CoachPrompts {   // not "PromptBuilder": that name is a FoundationModels re
         if ChatDecision.asksForRestDay(message) {
             lines.append("App: \(ChatDecision.dayName(message)) is now a rest day.")
         }
-        if ChatDecision.gymWords.contains(where: lower.contains) {
+        if !ChatDecision.isQuestion(message), let gym = ChatDecision.gymNow(in: message, gyms: c.gyms) {
+            let kit = gym.equipment.map(\.label).sorted().joined(separator: ", ")
+            lines.append(gym.isActive ? "App: you're already set to \(gym.name)."
+                : "App: FORGE moved you to \(gym.name), which has \(kit.isEmpty ? "no equipment" : kit.lowercased()), and is building a new plan for it. Say something short and encouraging about training there.")
+        } else if ChatDecision.gymWords.contains(where: lower.contains) {
             lines.append("App: to train somewhere else, they pick or add that gym on the Gyms screen, and the plan follows its equipment.")
         }
         if ["swap", "replace", "instead of", "substitute", "switch"].contains(where: lower.contains) {
             lines.append("App: in a workout, the Swap button on an exercise's card replaces it with any lift they search for.")
         }
+        let knowledge = minimal ? [] : CoachKnowledge.facts(for: message)
+        if !knowledge.isEmpty { lines.append("Coaching facts to answer from: " + knowledge.joined(separator: " ")) }
         let declined = SyncedSettings.skillGoalsDeclined
         for target in SkillLadder.targets(in: message)
         where !c.goals.contains(where: { $0.target == target }) && !declined.contains(target) {

@@ -72,6 +72,8 @@ struct CoachContext: Sendable {
     var warmUps = true
     /// Bodyweight lifts being built up to; their current step leads days that train those muscles.
     var goals: [SkillGoal] = []
+    /// Every gym the athlete has set up, so chat can switch to the one they're at.
+    var gyms: [GymInfo] = []
 
     var isToday: Bool { Calendar.current.isDateInToday(date) }
 
@@ -126,6 +128,13 @@ struct CoachContext: Sendable {
     }
 }
 
+struct GymInfo: Sendable, Hashable {
+    let name: String
+    let detail: String
+    let equipment: Set<Equipment>
+    let isActive: Bool
+}
+
 struct CoachReply: Sendable {
     var message: String
     var note: NoteSnapshot?
@@ -137,6 +146,8 @@ struct CoachReply: Sendable {
     var goalOffers: [String] = []
     /// Make `targetDate` (or today) a rest day.
     var restDay = false
+    /// Switch the active gym to this one and replan.
+    var switchGym: String? = nil
 }
 
 enum DayMatcher {

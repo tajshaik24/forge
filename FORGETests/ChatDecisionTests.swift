@@ -7,9 +7,17 @@ import Foundation
 @Suite("Chat decisions")
 struct ChatDecisionTests {
     private func context() -> CoachContext {
-        CoachContext(date: .now, isTrainingDay: true, trainingDaysThisWeek: 4, split: .coachDecides, goal: "Build muscle",
-                     minutes: 45, gymName: "Gym", equipment: Set(Equipment.allCases), notes: [], recent: [], readiness: [:],
-                     health: HealthSnapshot(), currentPlan: nil)
+        var c = CoachContext(date: .now, isTrainingDay: true, trainingDaysThisWeek: 4, split: .coachDecides, goal: "Build muscle",
+                             minutes: 45, gymName: "Commercial gym", equipment: Set(Equipment.allCases), notes: [], recent: [],
+                             readiness: [:], health: HealthSnapshot(), currentPlan: nil)
+        c.gyms = [GymInfo(name: "Home gym", detail: "Garage · DBs to 50 lb", equipment: [.dumbbells, .bench], isActive: false),
+                  GymInfo(name: "Commercial gym", detail: "Full equipment", equipment: Set(Equipment.allCases), isActive: true),
+                  GymInfo(name: "Travel", detail: "Hotel gym", equipment: [.dumbbells], isActive: false)]
+        c.currentPlan = PlannedWorkout(date: .now, focus: "Pull", muscles: [.back, .biceps], minutes: 45, reasons: [],
+            exercises: [PlannedExercise(name: "Inverted row", sets: 3, reps: "6-12"), PlannedExercise(name: "Lat pulldown", sets: 3, reps: "8-12"),
+                        PlannedExercise(name: "Dumbbell curl", sets: 3, reps: "10-15")],
+            restSeconds: 90, gymName: "Commercial gym", engine: "AI Coach")
+        return c
     }
 
     private func decide(_ message: String, kind: ChatDecision.Kind = .other, exercises: [String] = [], buildToward: [String] = [],
@@ -43,6 +51,7 @@ struct ChatDecisionTests {
         let back = decide("I tweaked my lower back yesterday", reply: "I tweaked my lower back yesterday")
         #expect(back.note?.avoid.contains(.axialLoading) == true)
         #expect(back.message != "I tweaked my lower back yesterday")   // an echo isn't a reply
+        #expect(decide("I tweaked my lower back yesterday", rule: "No deep knee bends").note?.rule == "I tweaked my lower back yesterday")
     }
 
     @Test func notesOnlyNameLiftsTheAthleteNamed() {
@@ -93,9 +102,29 @@ struct ChatDecisionTests {
         #expect(decide("pull ups are too hard but I want to get there", kind: .goal, buildToward: ["Negative pull-up"]).goalOffers == ["Pull-up"])
     }
 
-    @Test func gymChangesPointToTheGymsScreen() {
-        #expect(decide("I'm at a hotel gym with just dumbbells", kind: .equipment).message.contains("Gyms screen"))
-        #expect(!decide("what gym exercises hit chest?", kind: .question).message.contains("Gyms screen"))
+    @Test func switchesToTheGymTheyreAt() {
+        #expect(decide("I'm at a hotel gym with just dumbbells", kind: .equipment).switchGym == "Travel")
+        #expect(decide("working out at home today", kind: .equipment).switchGym == "Home gym")
+        #expect(decide("back at the commercial gym", kind: .equipment).switchGym == nil)   // already there
+        #expect(decide("I'm at a hotel gym", kind: .equipment).message.contains("Switched to Travel"))
+        // A trip later isn't a switch now.
+        let later = decide("I'm traveling next week", kind: .schedule)
+        #expect(later.switchGym == nil && later.message.contains("Gyms screen"))
+        #expect(decide("what gym exercises hit chest?", kind: .question).switchGym == nil)
+    }
+
+    @Test func repliesDontReciteThePlan() {
+        let r = decide("thanks coach!", reply: "Great work! Today you have inverted row, lat pulldown and dumbbell curl. Keep it up.")
+        #expect(r.message == "Great work! Keep it up.")
+        // Asked about today: the lifts stay.
+        let today = decide("what's in today's workout?", kind: .question, reply: "Inverted row, lat pulldown and dumbbell curl.")
+        #expect(today.message.contains("lat pulldown"))
+    }
+
+    @Test func openQuestionsGetCoachingFacts() {
+        #expect(CoachKnowledge.facts(for: "should I do cardio on rest days?").first?.contains("Easy cardio") == true)
+        #expect(CoachKnowledge.facts(for: "why is my bench stuck?").first?.contains("top of the rep range") == true)
+        #expect(CoachKnowledge.facts(for: "add more chest work").isEmpty)
     }
 
     @Test func promptLabelsNeverReachTheAthlete() {
