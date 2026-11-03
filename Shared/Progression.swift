@@ -137,7 +137,7 @@ enum Progression {
         }
     }
 
-    private static func roundDown(_ lb: Double, unit: WeightUnit) -> Double {
+    static func roundDown(_ lb: Double, unit: WeightUnit) -> Double {
         let v = (unit.fromPounds(lb) / unit.step).rounded(.down) * unit.step
         return unit.toPounds(v)
     }

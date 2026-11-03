@@ -199,9 +199,19 @@ enum DataStore {
 
     /// Syncs through the user's private iCloud database. Falls back to on-device storage
     /// if iCloud isn't set up (e.g. a simulator not signed in), so the app still runs.
+    /// Debug launches with `-demo`: in-memory sample data, nothing synced.
+    static var isDemo: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-demo")
+        #else
+        false
+        #endif
+    }
+
     @MainActor static let shared: ModelContainer = {
         // Unit tests host the app unsigned, without the iCloud entitlement CloudKit mirroring requires.
-        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+        // Unit tests, and `-demo` debug launches (see Demo.swift), use a throwaway store.
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil || isDemo {
             let memory = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
             return try! ModelContainer(for: schema, configurations: [memory])
         }
