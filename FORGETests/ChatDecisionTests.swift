@@ -85,6 +85,8 @@ struct ChatDecisionTests {
         #expect(decide("I slept 5 hours", minutes: 300).minutesOverride == nil)
         #expect(decide("bench felt easy", minutes: 45).minutesOverride == nil)
         #expect(decide("only 30 min today").message.contains("30 min"))
+        #expect(decide("can you make my workouts longer?", minutes: 60).minutesOverride == nil)
+        #expect(decide("give me forty five minutes today", minutes: 45 + 1).minutesOverride == 46)
     }
 
     @Test func restDaysFromTheWords() {
@@ -159,5 +161,61 @@ struct ChatDecisionTests {
     @Test func builtInCoachDoesntSaveOffTopicAsANote() async throws {
         let r = try await RuleBasedCoach().reply(to: "tell me a joke", context: context())
         #expect(r.message == ChatDecision.offTopicLine && r.note == nil)
+    }
+
+    @Test func smallTalkIsJustSmallTalk() {
+        for message in ["thanks coach!", "hey what's up", "Thank you so much", "good morning", "cool, thanks"] {
+            #expect(ChatDecision.isSmallTalk(message), "\(message)")
+        }
+        for message in ["thanks, can you add more arms?", "hey my knee hurts", "only 30 min today"] {
+            #expect(!ChatDecision.isSmallTalk(message), "\(message)")
+        }
+        let prompt = CoachPrompts.chat("thanks coach!", context())
+        #expect(prompt.contains("small talk") && !prompt.contains("90 s rest"))
+    }
+
+    @Test func repliesDontReciteSessionNumbers() {
+        let r = decide("hey what's up", reply: "Hey! Today's 45-minute session at the Commercial gym has 90 s rest between sets. Let's go!")
+        #expect(r.message == "Hey! Let's go!")
+        // Asked about today, the numbers stay.
+        #expect(decide("how long is today's session?", kind: .question, reply: "About 45 min at the Commercial gym.").message.contains("45 min"))
+    }
+
+    @Test func alcoholAndWatchQuestionsGetFacts() {
+        #expect(CoachKnowledge.facts(for: "can I drink beer and still make gains?").first?.contains("drink or two") == true)
+        #expect(CoachKnowledge.facts(for: "my watch isn't showing heart rate").first?.contains("Data Access") == true)
+        #expect(ChatDecision.isOffTopic("recommend a movie to watch", context: context()))
+    }
+
+    @Test func medicalQuestionsGoToTheDoctor() {
+        let r = decide("I'm pregnant, can I keep lifting?", kind: .question,
+                       reply: "The app confirms your plan is safe with proper form. Listen to your body.")
+        #expect(!r.message.contains("safe") && r.message.contains("doctor"))
+        #expect(CoachKnowledge.facts(for: "I'm pregnant, can I keep lifting?").first?.contains("doctor") == true)
+    }
+
+    @Test func somethingToFixIsntALiftToDrop() {
+        #expect(decide("my grip gives out on deadlifts", kind: .limitation, exercises: ["Barbell deadlift"], remember: true,
+                       rule: "Avoid standing heavy lifts").note == nil)
+        #expect(decide("I can't do a pull up", kind: .limitation, exercises: ["Pull-up"]).note?.exercises == ["Pull-up"])
+    }
+
+    @Test func noParroting() {
+        #expect(decide("make friday a rest day", reply: "I agree with you—Friday is now a rest day.").message == "Friday is now a rest day.")
+        #expect(decide("can I drink beer?", kind: .question, reply: "A drink is fine. You asked if you can drink beer.").message == "A drink is fine.")
+        #expect(decide("I tweaked my lower back yesterday", reply: "I tweaked my lower back yesterday.").message.hasPrefix("Got it"))
+    }
+
+    @Test func swappingIsAlwaysPossible() {
+        #expect(decide("can I swap lat pulldowns for something else?", kind: .question,
+                       reply: "You can't swap lat pulldowns, we're sticking to it.").message.contains("tap Swap"))
+    }
+
+    @Test func aLiftOutsideTodaysPlanDoesntRecite() {
+        let r = decide("I got a new PR on deadlift!", reply: "Great job! Today: inverted row, lat pulldown and dumbbell curl.")
+        #expect(r.message == "Great job!")
+        #expect(ChatDecision.isSmallTalk("lol") && !ChatDecision.isOffTopic("lol", context: context(), modelSays: true))
+        #expect(SkillLadder.targets(in: "how heavy should my first bench press be?").isEmpty)
+        #expect(SkillLadder.targets(in: "how do I get my first pull-up?") == ["Pull-up"])
     }
 }

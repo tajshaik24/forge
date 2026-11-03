@@ -162,7 +162,9 @@ struct GeneratedReply {
 
 enum ExerciseFacts {
     static func facts(about ex: Exercise, _ c: CoachContext) -> String {
-        var lines = ["\(ex.name): \(ex.primary.label.lowercased())\(ex.secondary.isEmpty ? "" : " and " + ex.secondary.map { $0.label.lowercased() }.joined(separator: ", ")), \(ex.reps) reps."]
+        let muscles = ([ex.primary] + ex.secondary).map { $0.label.lowercased() }
+        let muscleText = muscles.count > 1 ? muscles.dropLast().joined(separator: ", ") + " and " + muscles.last! : muscles[0]
+        var lines = ["\(ex.name): works \(muscleText), \(ex.reps) reps."]
         if !ex.equipment.isSubset(of: c.equipment) {
             lines.append("Not possible at \(c.gymName): needs \(ex.equipment.subtracting(c.equipment).map(\.label).sorted().joined(separator: ", ")).")
         }
@@ -241,9 +243,10 @@ struct AppleIntelligenceCoach: CoachEngine {
     - Use only weights, reps and rest times that appear in the facts. Never invent numbers.
     - Coach notes are already applied to every plan. Bring one up only if the message is about it.
     - Don't list the whole plan unless they ask for it.
-    - Lines starting "App:" say what the app is doing about this message. Agree with them, in your own words.
+    - Lines starting "App:" say what the app is doing about this message. Confirm them in your own words.
     - Most lifts are safe when learned light with good form. Be encouraging.
-    - Only if the athlete says they felt dizzy, faint, chest pain or sharp pain, suggest they see a doctor.
+    - If they mention pregnancy, a medical condition, dizziness, fainting, chest pain or sharp pain, suggest they check with their doctor. Never say a plan is medically safe.
+    - If the app can't do something they ask, say where in the app they can do it, using the facts given.
     """
 
     func plan(for context: CoachContext) async throws -> PlannedWorkout {
@@ -334,9 +337,16 @@ enum CoachPrompts {   // not "PromptBuilder": that name is a FoundationModels re
         let named = Array(ExerciseCatalog.mentioned(in: message).prefix(3))
         // The lifts only when the message is about today's workout, so replies don't recite the plan.
         let switching = !ChatDecision.isQuestion(message) && ChatDecision.gymNow(in: message, gyms: c.gyms).map { !$0.isActive } == true
-        let aboutToday = ChatDecision.isAboutToday(message) && !switching
-        if let p = c.currentPlan, !p.isRestDay, !switching {
-            lines.append("Today's plan: \(p.focus) at \(p.gymName), about \(p.minutes) min, \(p.restSeconds) s rest between sets" + (aboutToday ? ". Lifts:" : ", \(p.exercises.count) lifts."))
+        let aboutToday = ChatDecision.isAboutToday(message, plan: c.currentPlan) && !switching
+        // Small talk gets a short, warm reply, not a briefing.
+        let smallTalk = ChatDecision.isSmallTalk(message)
+        if smallTalk {
+            lines.append("App: this is small talk. Reply warmly in one short sentence. Don't describe the plan or any numbers.")
+        }
+        if let p = c.currentPlan, !p.isRestDay, !switching, !smallTalk {
+            // Only the focus unless the message is about today, so a reply has no session numbers to recite.
+            lines.append(aboutToday ? "Today's plan: \(p.focus) at \(p.gymName), about \(p.minutes) min, \(p.restSeconds) s rest between sets. Lifts:"
+                                    : "Today is a \(p.focus) day.")
             if aboutToday {
                 for e in p.exercises {
                     let reps = e.target.map { "\($0.reps)" } ?? e.reps
@@ -349,7 +359,7 @@ enum CoachPrompts {   // not "PromptBuilder": that name is a FoundationModels re
         } else if let p = c.currentPlan, p.isRestDay {
             lines.append("Today is a rest day.")
         }
-        lines.append("Athlete: goal \(c.goal.lowercased()), \(c.experience.promptLabel), training \(c.trainingDaysThisWeek) days a week at \(c.gymName).")
+        if !smallTalk { lines.append("Athlete: goal \(c.goal.lowercased()), \(c.experience.promptLabel), training \(c.trainingDaysThisWeek) days a week at \(c.gymName).") }
         // Notes only when the message touches them, so they don't creep into unrelated answers.
         let relevantNotes = c.notes.filter { note in
             !note.exercises.isDisjoint(with: named) || ["why", "note", "avoid", "can't", "hurt", "pain", "knee", "back", "shoulder"].contains(where: lower.contains)
@@ -357,7 +367,10 @@ enum CoachPrompts {   // not "PromptBuilder": that name is a FoundationModels re
         if !relevantNotes.isEmpty, !minimal {
             lines.append("Coach notes, already applied to every plan: " + relevantNotes.map(\.rule).joined(separator: "; ") + ".")
         }
-        for goal in c.goals where !minimal {
+        // Goals only when the message is about them or today's training.
+        let aboutGoals = aboutToday || ["goal", "progress", "step", "pull-up", "pull up", "chin", "push-up", "push up", "dip", "how am i doing"]
+            .contains(where: lower.contains) || c.goals.contains { lower.contains($0.target.lowercased()) }
+        for goal in c.goals where !minimal && aboutGoals {
             lines.append("Goal \(goal.target): \(goal.label), \(goal.passes) of \(SkillGoal.passesToMoveUp) sessions done on this step.")
         }
         // Facts about the lifts they named, so answers use their real numbers and the app's library.

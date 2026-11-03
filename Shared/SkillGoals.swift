@@ -72,7 +72,10 @@ struct SkillLadder: Sendable, Hashable {
         let lower = text.lowercased()
         guard !GoalWords.pain.contains(where: lower.contains) else { return [] }
         let named = ExerciseCatalog.mentioned(in: text)
-        if GoalWords.aspire.contains(where: lower.contains) {
+        let aspired = GoalWords.aspire.filter { lower.contains($0) }
+        // "My first bench press" is about starting out, not a goal; "my first pull-up" is.
+        if aspired == ["first"] { return named.filter { (Self.named($0)?.steps.count ?? 0) > 1 } }
+        if !aspired.isEmpty {
             // A move FORGE can't program ("a muscle-up") builds on lifts it can.
             let closest = ExerciseCatalog.notInLibrary(in: text).flatMap { ExerciseCatalog.closestTo[$0] ?? [] }
             return (named + closest).reduce(into: [String]()) { list, name in

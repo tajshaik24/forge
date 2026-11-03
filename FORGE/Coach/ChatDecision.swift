@@ -29,6 +29,9 @@ enum ChatDecision {
                                   "tired of", "enjoy"]
     static let dislikeWords = ["hate", "bore", "boring", "dislike", "not a fan", "sick of", "tired of", "don't want", "don’t want",
                                "avoid", "never want"]
+    static let medicalWords = ["pregnan", "postpartum", "post-partum", "gave birth", "heart condition", "heart problem",
+                               "blood pressure", "hypertension", "diabet", "surgery", "operation", "hernia", "medication",
+                               "chemo", "cancer", "asthma", "epilep", "seizure", "osteopor", "stroke", "concussion"]
     static let symptomWords = ["dizzy", "lightheaded", "light-headed", "faint", "blacked out"]
     static let questionStarts = ["how ", "what ", "why ", "when ", "where ", "which ", "should ", "is it ", "is that ",
                                  "can i ", "could i ", "do i ", "does ", "am i ", "are ", "will "]
@@ -86,7 +89,7 @@ enum ChatDecision {
         let plainlyOff = offTopicStems.contains { stem in
             stem.contains(" ") ? lower.contains(stem) : words.contains { $0.hasPrefix(stem) }
         }
-        return (modelSays || plainlyOff) && !isFitness(text, context: context)
+        return (modelSays || plainlyOff) && !isFitness(text, context: context) && !isSmallTalk(text)
     }
 
     static func offTopicReply() -> CoachReply {
@@ -116,17 +119,26 @@ enum ChatDecision {
 
     static let todayWords = ["today", "plan", "session", "lift", "exercise", "muscle", "why", "warm", "sets"]
 
-    /// The message is about today's workout, or names a lift: the plan's lifts belong in the reply.
-    static func isAboutToday(_ text: String) -> Bool {
+    /// The message is about today's workout, or names a lift in it: the plan's lifts belong in the reply.
+    /// A lift that isn't in today's plan ("new PR on deadlift!") doesn't make the plan worth reciting.
+    static func isAboutToday(_ text: String, plan: PlannedWorkout? = nil) -> Bool {
         let lower = text.lowercased()
-        return !ExerciseCatalog.mentioned(in: text).isEmpty || todayWords.contains(where: lower.contains)
+        let named = Set(ExerciseCatalog.mentioned(in: text))
+        let inPlan = plan.map { !named.isDisjoint(with: $0.exercises.map(\.name)) } ?? !named.isEmpty
+        // From the start of a word: "deadlift" isn't "lift".
+        let words = lower.split(whereSeparator: { !$0.isLetter }).map(String.init)
+        return inPlan || todayWords.contains { stem in words.contains { $0.hasPrefix(stem) } }
     }
 
     /// Drops sentences that recite the plan ("…inverted rows, lat pulldowns, seated cable rows…") from a
     /// reply to a message that wasn't about it. Small models like to read the prompt back.
     static func withoutPlanRecital(_ reply: String, plan: PlannedWorkout?, message: String) -> String {
-        guard let plan, !isAboutToday(message) else { return reply }
+        guard let plan, !isAboutToday(message, plan: plan) else { return reply }
         let names = Set(plan.exercises.map(\.name))
+        // The session's own numbers and gym, the way the model reads them back ("today's 45-minute session
+        // at the Commercial gym with 90 seconds rest").
+        let details = ["\(plan.minutes)-minute", "\(plan.minutes) min", "\(plan.restSeconds) s", "\(plan.restSeconds) sec",
+                       "\(plan.exercises.count) lifts", plan.gymName.lowercased()]
         var sentences: [String] = []
         var current = ""
         for ch in reply {
@@ -134,8 +146,38 @@ enum ChatDecision {
             if ".!?".contains(ch) { sentences.append(current); current = "" }
         }
         if !current.trimmingCharacters(in: .whitespaces).isEmpty { sentences.append(current) }
-        let kept = sentences.filter { names.intersection(ExerciseCatalog.mentioned(in: $0)).count < 2 }
+        let kept = sentences.filter { sentence in
+            let lower = sentence.lowercased()
+            return names.intersection(ExerciseCatalog.mentioned(in: sentence)).count < 2
+                && details.filter { lower.contains($0) }.count < 2
+        }
         return kept.joined().trimmingCharacters(in: .whitespaces)
+    }
+
+    /// Letters and digits only, for comparing a reply with the message it might be echoing.
+    static func plain(_ text: String) -> String {
+        String(text.lowercased().filter { $0.isLetter || $0.isNumber })
+    }
+
+    /// Drops the small model's habits of restating the question ("You asked if...") and of announcing
+    /// that it agrees with the app ("I agree with you—").
+    static func withoutParroting(_ reply: String) -> String {
+        var sentences: [String] = []
+        var current = ""
+        for ch in reply {
+            current.append(ch)
+            if ".!?".contains(ch) { sentences.append(current); current = "" }
+        }
+        if !current.trimmingCharacters(in: .whitespaces).isEmpty { sentences.append(current) }
+        let kept = sentences.filter {
+            let t = $0.trimmingCharacters(in: .whitespaces).lowercased()
+            return !(t.hasPrefix("you asked") || t.hasPrefix("you're asking") || t.hasPrefix("you are asking"))
+        }
+        var out = kept.joined().trimmingCharacters(in: .whitespaces)
+        for lead in ["I agree with you—", "I agree with you, ", "I agree with you. ", "I agree—", "I agree, "] where out.hasPrefix(lead) {
+            out = String(out.dropFirst(lead.count))
+        }
+        return out
     }
 
     static func withoutSwitchEcho(_ reply: String) -> String {
@@ -181,6 +223,22 @@ enum ChatDecision {
             s = String(s.dropFirst(lead.count))
         }
         return s.prefix(1).uppercased() + s.dropFirst()
+    }
+
+    static let smallTalkWords = ["thanks", "thank you", "thx", "ty", "hi", "hey", "hello", "yo", "sup", "what's up", "whats up",
+                                 "good morning", "morning", "good night", "night", "cool", "nice", "ok", "okay", "awesome",
+                                 "great", "love it", "appreciate", "cheers", "bye", "see you", "later", "lol", "haha", "coach",
+                                 "you're the best", "how are you", "how's it going"]
+
+    /// A greeting or thanks with nothing else in it: "thanks coach!", "hey what's up".
+    static func isSmallTalk(_ text: String) -> Bool {
+        var rest = " " + text.lowercased().replacingOccurrences(of: "’", with: "'")
+            .map { $0.isLetter || $0 == "'" ? $0 : " " } + " "
+        for word in smallTalkWords.sorted(by: { $0.count > $1.count }) {
+            rest = rest.replacingOccurrences(of: " \(word) ", with: "  ")
+        }
+        let left = rest.split(separator: " ").filter { !["so", "much", "man", "dude", "again", "for", "the", "a", "all", "really", "very", "buddy"].contains($0) }
+        return left.isEmpty && text.split(separator: " ").count <= 8
     }
 
     /// A lasting like or dislike about lifts or muscles ("squats bore me", "more glute work"), not a question.
@@ -242,7 +300,9 @@ enum ChatDecision {
         if hurts, avoid.isEmpty, named.isEmpty { avoid = MovementFlag.supported(MovementFlag.allCases, by: message) }
         if symptom { avoid.formUnion([.standingHeavy, .axialLoading]) }
         let preference = isPreference(message) && !onlyAGoal
-        let lasting = !isQuestion && !onlyAGoal && (preference || (f.kind != .goal && (hurts || symptom || f.kind == .limitation)))
+        // The model's "limitation" alone isn't enough: "my grip gives out on deadlifts" is something to fix, not a lift to drop.
+        let saysLimit = f.kind == .limitation && (cant || ExerciseCatalog.limited(in: message).isEmpty == false)
+        let lasting = !isQuestion && !onlyAGoal && (preference || (f.kind != .goal && (hurts || symptom || saysLimit)))
         var note: NoteSnapshot?
         if lasting, !limited.isEmpty || !avoid.isEmpty || preference {
             // A symptom gets a plain rule the planner can follow, whatever the model wrote.
@@ -264,7 +324,8 @@ enum ChatDecision {
 
         // Time, day and rest changes only when the words ask for them.
         let saidMinutes = minutes(in: message)
-        let modelMinutes = timeWords.contains(where: lower.contains) && f.minutes >= 10 && f.minutes <= 180 ? f.minutes : nil
+        // The model's number only when the words give a time ("forty minutes"), not for "make my workouts longer".
+        let modelMinutes = ["min", "hour"].contains(where: lower.contains) && f.minutes >= 10 && f.minutes <= 180 ? f.minutes : nil
         let minutes = isQuestion ? nil : (saidMinutes ?? modelMinutes).flatMap { (10...180).contains($0) && $0 != context.minutes ? $0 : nil }
         let restDay = !isQuestion && (asksForRestDay(message) || (f.restDay && restWords.contains(where: lower.contains)))
         let namedDay = DayMatcher.date(in: message)
@@ -276,7 +337,8 @@ enum ChatDecision {
         // Prompt labels never reach the athlete, and an echo of their own words isn't a reply.
         var reply = withoutPlanRecital(reply.replacingOccurrences(of: "App: ", with: ""), plan: context.currentPlan, message: message)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        if reply.isEmpty || reply.lowercased() == message.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) {
+        reply = withoutParroting(reply)
+        if reply.isEmpty || plain(reply) == plain(message) {
             reply = note != nil ? "Got it. Your plan will work around that." : "Got it."
         }
         func confirm(_ sentence: String, unless marker: String) {
@@ -291,6 +353,20 @@ enum ChatDecision {
                 reply = "Got it."
             }
             confirm("Saved to your notes, and upcoming plans will follow it.", unless: "notes")
+        }
+        // The app can always swap a lift; a reply saying it can't is wrong.
+        let swapping = ["swap", "replace", "instead of", "substitute"].contains(where: lower.contains)
+        if swapping, ["can't swap", "can’t swap", "cannot swap", "can't replace", "can’t replace", "sticking to it", "can't change", "can’t change"]
+            .contains(where: reply.lowercased().contains) {
+            reply = "Yes: in the workout, tap Swap on its card and pick any lift you like."
+        }
+        // Medical conditions are the doctor's call, never the app's: no "your plan is safe", and always the doctor.
+        if medicalWords.contains(where: lower.contains) {
+            reply = reply.split(separator: ".", omittingEmptySubsequences: true)
+                .filter { s in !["safe", "confirms", "approved", "no problem"].contains(where: s.lowercased().contains) }
+                .joined(separator: ".").trimmingCharacters(in: .whitespaces)
+            if !reply.isEmpty, !reply.hasSuffix(".") && !reply.hasSuffix("!") && !reply.hasSuffix("?") { reply += "." }
+            confirm("Check with your doctor about training with that, and tell me anything they say to avoid so your plan works around it.", unless: "doctor")
         }
         var switchGym: String?
         if !isQuestion, let gym = gymNow(in: message, gyms: context.gyms) {
