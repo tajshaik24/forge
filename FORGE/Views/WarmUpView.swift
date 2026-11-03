@@ -10,6 +10,8 @@ struct DrillsView: View {
     /// Lighter sets for the first lift, shown after the drills (warm-up only).
     var rampFor: String? = nil
     var ramp: [RampUp.Step] = []
+    /// Skip, when it shouldn't do the same as finishing (the cool-down goes back to the workout).
+    var onSkip: (() -> Void)? = nil
     let onDone: () -> Void
 
     @State private var index = 0
@@ -31,7 +33,7 @@ struct DrillsView: View {
                             .font(.system(size: 13)).foregroundStyle(Theme.muted)
                     }
                     Spacer()
-                    Button("Skip", action: onDone)
+                    Button("Skip", action: onSkip ?? onDone)
                         .font(.system(size: 15, weight: .semibold))
                         .accessibilityLabel(mode == .warmUp ? "Skip warm-up" : "Skip cool-down")
                 }
