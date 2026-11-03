@@ -107,7 +107,7 @@ targets:
         WKApplication: true
         WKCompanionAppBundleIdentifier: com.taj.forge
         WKBackgroundModes: [workout-processing]
-        NSHealthShareUsageDescription: "FORGE reads your heart rate during workouts."
+        NSHealthShareUsageDescription: "FORGE reads your heart rate during workouts and your step count for today."
         NSHealthUpdateUsageDescription: "FORGE saves your strength workouts to Apple Health so they appear in Fitness."
     settings:
       base:
