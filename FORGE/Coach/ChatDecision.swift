@@ -5,7 +5,7 @@ import Foundation
 /// athlete's own words, so a small model can't save a note nobody asked for, offer a goal for a lift
 /// they never named, or change today's length when they asked a question.
 enum ChatDecision {
-    enum Kind: Sendable { case question, limitation, goal, schedule, equipment, feedback, other }
+    enum Kind: Sendable { case question, limitation, goal, schedule, equipment, feedback, offTopic, other }
 
     /// The model's reading of the message, before checking.
     struct Fields: Sendable {
@@ -39,6 +39,59 @@ enum ChatDecision {
 
     static let gymWords = ["hotel", "at home", "home gym", "travel", "traveling", "travelling", "different gym", "new gym",
                            "dumbbells only", "only dumbbells", "just dumbbells", "no barbell", "no equipment"]
+
+    // MARK: Staying on topic
+
+    /// The reply to anything that isn't about training, recovery, nutrition, health or the app.
+    static let offTopicLine = "I'm your strength coach, so I stick to training, recovery and nutrition. Ask me anything about those."
+
+    /// Words that put a message on topic, however it's phrased ("can I drink beer and still make gains?").
+    /// Prefixes match the start of a word ("train" covers "training"); short or common words match whole.
+    static let fitnessPrefixes = ["workout", "train", "gym", "lift", "exercis", "weight", "muscle", "strength", "strong", "coach",
+        "routine", "session", "sleep", "slept", "tired", "recover", "stretch", "mobility", "yoga", "pilates", "cardio", "running",
+        "jog", "walk", "steps", "swim", "cycling", "hike", "hiking", "sport", "body", "injur", "health", "doctor", "physio",
+        "fitness", "gains", "bulk", "protein", "carb", "calori", "macros", "eating", "food", "diet", "meal", "nutrition", "hungry",
+        "hydrat", "supplement", "creatine", "caffeine", "coffee", "alcohol", "beer", "drink", "heart", "pulse", "energy", "stress",
+        "sore", "pain", "hurt", "ache", "warm", "posture", "flexib", "shoulder", "glute", "bicep", "tricep", "quad", "hamstring",
+        "knee", "wrist", "elbow", "ankle", "spine", "forge", "deload", "volume", "intensity", "tempo", "squat", "curl",
+        "plank", "burpee", "kettlebell", "dumbbell", "barbell", "machine", "cable"]
+    static let fitnessWords: Set<String> = ["set", "sets", "rep", "reps", "plan", "plans", "split", "run", "runs", "step",
+        "bike", "fit", "gain", "cut", "cutting", "lean", "fat", "carbs", "eat", "eats", "water", "abs", "arm", "arms", "leg", "legs",
+        "chest", "back", "calf", "calves", "core", "hip", "hips", "neck", "app", "rest", "resting", "pump", "pr", "pb", "1rm",
+        "rpe", "pull", "push", "press", "row", "rows", "rowing", "dip", "dips", "band", "bands", "mat", "shoes", "form", "nap"]
+
+    /// Topics that are plainly not the coach's, used when the model misses them.
+    static let offTopicStems = ["capital of", "joke", "poem", "poetry", "story", "song", "lyric", "weather", "forecast",
+        "stock", "crypto", "bitcoin", "invest", "vote", "election", "politic", "president", "news", "movie", "film", "tv show",
+        "netflix", "book", "novel", "recipe", "python", "javascript", "debug", "coding", "homework", "essay", "cover letter",
+        "resume", "translate", "math", "history", "riddle", "trivia", "game", "celebrity", "horoscope", "girlfriend", "boyfriend",
+        "dating"]
+
+    /// Whether a message is about training, recovery, nutrition, health or the app, by its words.
+    static func isFitness(_ text: String, context: CoachContext) -> Bool {
+        let lower = text.lowercased().replacingOccurrences(of: "’", with: "'")
+        let words = lower.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
+        let stemHit = words.contains { word in fitnessWords.contains(word) || fitnessPrefixes.contains(where: word.hasPrefix) }
+        return stemHit || lower.contains("work out") || lower.contains("working out") || !ExerciseCatalog.mentioned(in: text).isEmpty || !ExerciseCatalog.notInLibrary(in: text).isEmpty
+            || !CoachKnowledge.facts(for: text).isEmpty || GoalWords.pain.contains(where: lower.contains)
+            || symptomWords.contains(where: lower.contains) || minutes(in: text) != nil || asksForRestDay(text)
+            || gymNow(in: text, gyms: context.gyms) != nil || gymWords.contains(where: lower.contains)
+    }
+
+    /// Off topic: the model says so or the words plainly are, and nothing in it is about training.
+    /// Small talk ("thanks!", "hi") is neither, and gets a normal reply.
+    static func isOffTopic(_ text: String, context: CoachContext, modelSays: Bool = false) -> Bool {
+        let lower = text.lowercased()
+        let words = lower.split(whereSeparator: { !$0.isLetter }).map(String.init)
+        let plainlyOff = offTopicStems.contains { stem in
+            stem.contains(" ") ? lower.contains(stem) : words.contains { $0.hasPrefix(stem) }
+        }
+        return (modelSays || plainlyOff) && !isFitness(text, context: context)
+    }
+
+    static func offTopicReply() -> CoachReply {
+        CoachReply(message: offTopicLine, note: nil, shouldReplan: false, minutesOverride: nil)
+    }
 
     static let laterWords = ["next week", "next month", "tomorrow", "later", "will be", "going to be", "gonna be", "soon", "weekend"]
 
@@ -157,6 +210,8 @@ enum ChatDecision {
     }
 
     static func make(message: String, context: CoachContext, reply: String, fields f: Fields) -> CoachReply {
+        // Off topic: one plain line, and nothing changes.
+        if isOffTopic(message, context: context, modelSays: f.kind == .offTopic) { return offTopicReply() }
         let lower = message.lowercased()
         let isQuestion = !Self.isRequest(message) && (f.kind == .question || Self.isQuestion(message))
         let named = Set(ExerciseCatalog.mentioned(in: message))

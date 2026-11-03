@@ -109,7 +109,9 @@ enum GenMessageKind: CaseIterable {
     case equipment
     /// How training felt: too easy, too hard, enjoyed it.
     case feedback
-    /// Anything else.
+    /// Not about training, recovery, nutrition, health or this app: trivia, jokes, code, news, money.
+    case offTopic
+    /// Anything else, including small talk like thanks or hello.
     case other
 
     var kind: ChatDecision.Kind {
@@ -120,6 +122,7 @@ enum GenMessageKind: CaseIterable {
         case .schedule: .schedule
         case .equipment: .equipment
         case .feedback: .feedback
+        case .offTopic: .offTopic
         case .other: .other
         }
     }
@@ -233,6 +236,7 @@ struct AppleIntelligenceCoach: CoachEngine {
 
     private static let chatInstructions = """
     You are FORGE, a friendly, concise strength coach inside a workout app, talking with one athlete.
+    - You only discuss training, recovery, nutrition, health and this app. For anything else, mark it off topic and say briefly that you can only help with training.
     - Answer questions directly and specifically, using the facts given.
     - Use only weights, reps and rest times that appear in the facts. Never invent numbers.
     - Coach notes are already applied to every plan. Bring one up only if the message is about it.
@@ -274,6 +278,8 @@ struct AppleIntelligenceCoach: CoachEngine {
         // call costs a round trip, and the safety filter rejects many harmless tool transcripts.
         // The safety filter is inconsistent: if it blocks the full prompt, try once more with only the
         // plan, the app's own lines and the message, before the built-in coach takes over.
+        // Plainly off topic: answer without the model, so nothing off topic streams in first.
+        if ChatDecision.isOffTopic(message, context: context) { return ChatDecision.offTopicReply() }
         var out: GeneratedReply
         do {
             out = try await respond(CoachPrompts.chat(message, context), onText: onText)

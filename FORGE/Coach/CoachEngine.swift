@@ -418,6 +418,8 @@ struct RuleBasedCoach: CoachEngine {
 
     func reply(to message: String, context: CoachContext,
                onText: @escaping @MainActor @Sendable (String) -> Void) async throws -> CoachReply {
+        // Off topic: the same line as the AI Coach, and never saved as a note.
+        if ChatDecision.isOffTopic(message, context: context) { return ChatDecision.offTopicReply() }
         let offers = SkillLadder.targets(in: message)
         let limited = ExerciseCatalog.limited(in: message)
         let lower = message.lowercased().trimmingCharacters(in: .whitespaces)

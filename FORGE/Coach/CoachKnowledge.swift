@@ -51,9 +51,10 @@ enum CoachKnowledge {
             """),
     ]
 
-    /// Facts for the topics a message touches, at most two.
+    /// Facts for the topics a message touches, at most two. Words match from the start of a word,
+    /// so "weather" isn't "eat".
     static func facts(for message: String) -> [String] {
-        let lower = " " + message.lowercased() + " "
-        return topics.filter { $0.words.contains(where: lower.contains) }.prefix(2).map(\.facts)
+        let lower = " " + message.lowercased().map { $0.isLetter || $0.isNumber || $0 == "-" ? $0 : " " } + " "
+        return topics.filter { $0.words.contains { lower.contains(" " + $0) } }.prefix(2).map(\.facts)
     }
 }
