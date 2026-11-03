@@ -76,14 +76,14 @@ final class WorkoutTracker: NSObject {
 
     // MARK: Permissions
 
-    /// Only what's read: live heart rate and calories in a workout, plus (iPhone only) last night's sleep,
-    /// HRV and steps for the coach.
+    /// Only what's read: live heart rate and calories in a workout, today's steps, plus (iPhone only)
+    /// last night's sleep and HRV for the coach.
     static var readTypes: Set<HKObjectType> {
         #if os(iOS)
         [HKQuantityType(.heartRate), HKQuantityType(.activeEnergyBurned),
          HKQuantityType(.heartRateVariabilitySDNN), HKCategoryType(.sleepAnalysis), HKQuantityType(.stepCount)]
         #else
-        [HKQuantityType(.heartRate), HKQuantityType(.activeEnergyBurned)]
+        [HKQuantityType(.heartRate), HKQuantityType(.activeEnergyBurned), HKQuantityType(.stepCount)]
         #endif
     }
 

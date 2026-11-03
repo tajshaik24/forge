@@ -12,6 +12,22 @@ final class PhoneWatchLink: NSObject {
     struct Context: Codable, Equatable {
         var plan: PlannedWorkout?
         var unit: WeightUnit
+        /// Today's and the coming days' plans, so the Watch shows the week before iCloud syncs.
+        /// Missing from contexts sent by older iPhone builds.
+        var week: [PlannedWorkout] = []
+
+        init(plan: PlannedWorkout?, unit: WeightUnit, week: [PlannedWorkout] = []) {
+            self.plan = plan
+            self.unit = unit
+            self.week = week
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            plan = try c.decodeIfPresent(PlannedWorkout.self, forKey: .plan)
+            unit = try c.decode(WeightUnit.self, forKey: .unit)
+            week = try c.decodeIfPresent([PlannedWorkout].self, forKey: .week) ?? []
+        }
     }
 
     /// Latest context from the iPhone (Watch side).
@@ -34,6 +50,14 @@ final class PhoneWatchLink: NSObject {
         return plan
     }
 
+    /// The plans the iPhone sent for the days after today, earliest first.
+    var weekPlans: [PlannedWorkout] {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: .now)
+        return (received?.week ?? []).filter { $0.date > today && !cal.isDateInToday($0.date) }
+            .sorted { $0.date < $1.date }
+    }
+
     #if os(iOS)
     /// A paired Watch with FORGE installed, so a workout started here can run on the wrist.
     var canStartOnWatch: Bool {
@@ -42,8 +66,9 @@ final class PhoneWatchLink: NSObject {
             && session.isPaired && session.isWatchAppInstalled
     }
 
-    func send(plan: PlannedWorkout?) {
-        latest = Context(plan: plan, unit: SyncedSettings.unit)
+    /// Sends today's plan and, when given, the week's (else the week sent last time).
+    func send(plan: PlannedWorkout?, week: [PlannedWorkout]? = nil) {
+        latest = Context(plan: plan, unit: SyncedSettings.unit, week: week ?? latest?.week ?? [])
         flush()
     }
 

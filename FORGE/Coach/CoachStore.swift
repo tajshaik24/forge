@@ -9,7 +9,11 @@ import SwiftData
 final class CoachStore {
     let engine: any CoachEngine
     private(set) var plan: PlannedWorkout? {
-        didSet { if plan != oldValue { PhoneWatchLink.shared.send(plan: plan) } }
+        didSet {
+            if plan != oldValue {
+                PhoneWatchLink.shared.send(plan: plan, week: DataStore.upcomingPlans(in: DataStore.shared.mainContext))
+            }
+        }
     }
     private(set) var isThinking = false
     /// The coach's reply so far, while it's being written.
@@ -168,6 +172,7 @@ final class CoachStore {
             pendingWeekPass = nil
             clearFirst = again
         }
+        PhoneWatchLink.shared.send(plan: plan, week: DataStore.upcomingPlans(in: ctx))   // the Watch's week view
     }
 
     private func planWeekPass(_ ctx: ModelContext) async {
