@@ -146,9 +146,11 @@ struct ActiveWorkoutView: View {
     private var liveState: WorkoutActivityAttributes.ContentState? {
         guard finished == nil, phase == .lifting, let current else { return nil }
         let resting = restUntil.map { $0 > .now } == true
-        return .init(exercise: current.name, setNumber: min(setNumber, current.sets), totalSets: current.sets,
+        return .init(exercise: current.name, setLabel: "Set \(min(setNumber, current.sets)) of \(current.sets)",
+                     detail: liveDetail(current, resting: resting),
+                     heartRate: tracker.heartRate > 0 ? Int(tracker.heartRate) : nil,
                      restStarted: resting ? restStarted : nil, restUntil: resting ? restUntil : nil,
-                     nextUp: liveDetail(current, resting: resting), onWatch: tracker.isMirrored)
+                     onWatch: tracker.isMirrored, progress: 0)
     }
 
     /// The Live Activity's last line, which shouldn't repeat the name above it: the target while

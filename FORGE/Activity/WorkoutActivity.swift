@@ -7,13 +7,18 @@ import Foundation
 struct WorkoutActivityAttributes: ActivityAttributes {
     struct ContentState: Codable, Hashable {
         var exercise: String
-        var setNumber: Int
-        var totalSets: Int
+        /// "Set 2 of 3", "Warm-up", "Test set".
+        var setLabel: String
+        /// The weight and reps to do, or what's next while resting.
+        var detail: String
+        /// Beats per minute from the Watch; nil without one.
+        var heartRate: Int?
         /// Set while resting.
         var restStarted: Date?
         var restUntil: Date?
-        var nextUp: String
         var onWatch: Bool
+        /// 0...1 of the workout's sets done.
+        var progress: Double
     }
 
     var focus: String

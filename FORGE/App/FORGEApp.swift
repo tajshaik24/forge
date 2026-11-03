@@ -30,10 +30,23 @@ struct RootView: View {
     @Environment(\.modelContext) private var ctx
     @Environment(CoachStore.self) private var coach
     @Environment(\.scenePhase) private var scenePhase
-    @State private var showSetup = !SyncedSettings.onboarded
+    @State private var showSetup = !SyncedSettings.onboarded && !DataStore.isDemo
     @State private var launching = true
 
     var body: some View {
+        #if DEBUG
+        if Demo.isOn, let screen = Demo.screen {
+            Demo.view(for: screen)
+                .task { Demo.seed(ctx); await coach.loadToday(ctx) }
+        } else {
+            tabs
+        }
+        #else
+        tabs
+        #endif
+    }
+
+    private var tabs: some View {
         TabView {
             Tab("Today", systemImage: "flame") { NavigationStack { TodayView() } }
             Tab("Coach", systemImage: "bubble.left.and.text.bubble.right") { NavigationStack { CoachChatView() } }
@@ -68,10 +81,13 @@ struct RootView: View {
             Task { _ = await coach.finishWorkout(ctx) }
         }
         .task {
+            #if DEBUG
+            if Demo.isOn { Demo.seed(ctx) }
+            #endif
             Seed.ifNeeded(ctx)
             DataStore.refreshCustomExercises(in: ctx)
             guard !showSetup else { return }   // setup asks for Health access and plans once it's done
-            await WorkoutTracker.shared.requestAuthorization()
+            if !DataStore.isDemo { await WorkoutTracker.shared.requestAuthorization() }
             await coach.loadToday(ctx)
             if SyncedSettings.crewBeta, CrewService.shared.crew != nil {
                 await CrewService.shared.subscribe()   // idempotent; covers your other devices too

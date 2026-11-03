@@ -3,8 +3,11 @@ import AppIntents
 import SwiftUI
 import WidgetKit
 
-/// Rest countdown and current set on the Lock Screen and in the Dynamic Island.
-/// Timers use `Text(timerInterval:)`, so they tick without the app sending updates.
+/// The workout on the Lock Screen and in the Dynamic Island: the lift and set you're on, heart rate,
+/// time into the workout, and the rest countdown while resting.
+/// Timers use `Text(timerInterval:)`, so they tick without the app sending updates. Every timer has a
+/// bounded range and a fixed width: an open-ended one sizes for millions of hours and pushes the rest
+/// of the layout out of view.
 struct WorkoutLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: WorkoutActivityAttributes.self) { context in
@@ -13,10 +16,11 @@ struct WorkoutLiveActivity: Widget {
                 .activitySystemActionForegroundColor(Theme.accent)
         } dynamicIsland: { context in
             let state = context.state
+            let start = context.attributes.workoutStart
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(state.restUntil == nil ? "SET \(state.setNumber)/\(state.totalSets)" : "REST")
+                        Text(state.resting ? "REST" : state.setLabel.uppercased())
                             .font(Theme.label).foregroundStyle(Theme.muted)
                         Text(state.exercise).font(.system(size: 15, weight: .heavy))
                             .lineLimit(2).minimumScaleFactor(0.75)
@@ -24,35 +28,52 @@ struct WorkoutLiveActivity: Widget {
                     .padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    ClockText(state: state, workoutStart: context.attributes.workoutStart)
-                        .font(Theme.mono(28)).foregroundStyle(Theme.accent)
-                        .frame(maxWidth: 110, alignment: .trailing)
+                    VStack(alignment: .trailing, spacing: 2) {
+                        if state.resting, let until = state.restUntil {
+                            Countdown(until: until).font(Theme.mono(26)).foregroundStyle(Theme.accent)
+                        } else {
+                            HeartRate(bpm: state.heartRate).font(Theme.mono(22))
+                        }
+                        Elapsed(since: start).font(Theme.mono(12)).foregroundStyle(Theme.muted)
+                    }
+                    .padding(.trailing, 4)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(spacing: 8) {
-                        if let started = state.restStarted, let until = state.restUntil {
+                        if let started = state.restStarted, let until = state.restUntil, state.resting {
                             ProgressView(timerInterval: started...until, countsDown: true) { EmptyView() } currentValueLabel: { EmptyView() }
                                 .tint(Theme.accent)
                         }
                         HStack {
-                            Text(state.nextUp).font(.footnote).foregroundStyle(Theme.muted).lineLimit(2)
-                            Spacer()
-                            if state.restUntil != nil { RestButtons() }
+                            Text(state.detail).font(.footnote).foregroundStyle(Theme.muted).lineLimit(1)
+                            Spacer(minLength: 8)
+                            if state.resting { RestButtons() }
                         }
                     }
                 }
             } compactLeading: {
-                Image(systemName: state.restUntil == nil ? "dumbbell.fill" : "timer").foregroundStyle(Theme.accent)
+                Image(systemName: state.resting ? "timer" : "dumbbell.fill").foregroundStyle(Theme.accent)
             } compactTrailing: {
-                ClockText(state: state, workoutStart: context.attributes.workoutStart)
-                    .font(Theme.mono(14)).foregroundStyle(Theme.accent)
-                    .frame(maxWidth: 52)
+                Group {
+                    if state.resting, let until = state.restUntil {
+                        Countdown(until: until)
+                    } else {
+                        Elapsed(since: start)
+                    }
+                }
+                .font(Theme.mono(14)).foregroundStyle(Theme.accent)
+                .frame(width: 48)
             } minimal: {
-                Image(systemName: state.restUntil == nil ? "dumbbell.fill" : "timer").foregroundStyle(Theme.accent)
+                Image(systemName: state.resting ? "timer" : "dumbbell.fill").foregroundStyle(Theme.accent)
             }
             .keylineTint(Theme.accent)
         }
     }
+}
+
+private extension WorkoutActivityAttributes.ContentState {
+    /// Resting until a time still ahead. A rest that ran out while nothing updated reads as lifting.
+    var resting: Bool { restUntil.map { $0 > .now } ?? false }
 }
 
 private struct LockScreenView: View {
@@ -61,54 +82,82 @@ private struct LockScreenView: View {
     var body: some View {
         let state = context.state
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(spacing: 6) {
                 Text("FORGE · \(context.attributes.focus.uppercased())").font(Theme.label).tracking(1)
-                    .foregroundStyle(Theme.accent)
-                if state.onWatch { Image(systemName: "applewatch").font(.caption).foregroundStyle(Theme.muted) }
-                Spacer()
-                Text(state.restUntil == nil ? "SET \(state.setNumber) OF \(state.totalSets)" : "REST")
-                    .font(Theme.label).foregroundStyle(Theme.muted)
+                    .foregroundStyle(Theme.accent).lineLimit(1)
+                if state.onWatch { Image(systemName: "applewatch").font(.caption2).foregroundStyle(Theme.muted) }
+                Spacer(minLength: 8)
+                Image(systemName: "stopwatch").font(.caption2).foregroundStyle(Theme.muted)
+                Elapsed(since: context.attributes.workoutStart)
+                    .font(Theme.mono(13)).foregroundStyle(Theme.muted)
+                    .frame(width: 58, alignment: .trailing)
             }
-            // Long names wrap to a second line and shrink a little rather than cut off.
+
             HStack(alignment: .center, spacing: 12) {
-                Text(state.exercise).font(Theme.display(24)).foregroundStyle(Theme.text)
-                    .lineLimit(2).minimumScaleFactor(0.7)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                ClockText(state: state, workoutStart: context.attributes.workoutStart)
-                    .font(Theme.mono(34)).foregroundStyle(Theme.text)
-                    .fixedSize()
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(state.resting ? "REST · UP NEXT" : state.setLabel.uppercased())
+                        .font(Theme.label).foregroundStyle(Theme.muted)
+                    Text(state.exercise).font(.system(size: 20, weight: .heavy)).foregroundStyle(Theme.text)
+                        .lineLimit(2).minimumScaleFactor(0.75)
+                    Text(state.detail).font(.system(size: 13)).foregroundStyle(Theme.muted).lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .layoutPriority(1)
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    if state.resting, let until = state.restUntil {
+                        Countdown(until: until).font(Theme.mono(34)).foregroundStyle(Theme.text)
+                    } else {
+                        HeartRate(bpm: state.heartRate).font(Theme.mono(30))
+                    }
+                }
+                .frame(width: 104, alignment: .trailing)
             }
-            if let started = state.restStarted, let until = state.restUntil {
+
+            if let started = state.restStarted, let until = state.restUntil, state.resting {
                 ProgressView(timerInterval: started...until, countsDown: true) { EmptyView() } currentValueLabel: { EmptyView() }
                     .tint(Theme.accent)
-            }
-            HStack {
-                Text(state.nextUp).font(.footnote).foregroundStyle(Theme.muted)
-                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
-                Spacer()
-                if state.restUntil != nil { RestButtons() }
+                HStack {
+                    Spacer()
+                    RestButtons()
+                }
+            } else {
+                ProgressView(value: state.progress).tint(Theme.accent)
             }
         }
         .padding(16)
     }
 }
 
-/// Rest countdown while resting, otherwise time since the workout started.
-private struct ClockText: View {
-    let state: WorkoutActivityAttributes.ContentState
-    let workoutStart: Date
+/// "♥ 132", or "♥ --" without a Watch.
+private struct HeartRate: View {
+    let bpm: Int?
 
     var body: some View {
-        Group {
-            if let until = state.restUntil, until > .now {
-                Text(timerInterval: Date.now...until, countsDown: true)
-            } else {
-                Text(timerInterval: workoutStart...Date.distantFuture, countsDown: false)
-            }
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Image(systemName: "heart.fill").font(.system(size: 14)).foregroundStyle(.red)
+            Text(bpm.map(String.init) ?? "--").monospacedDigit().foregroundStyle(Theme.text)
         }
-        .monospacedDigit()
-        .multilineTextAlignment(.trailing)
+        .lineLimit(1)
+    }
+}
+
+/// Time since the workout started. Bounded to 6 hours so the system sizes it sensibly.
+private struct Elapsed: View {
+    let since: Date
+
+    var body: some View {
+        Text(timerInterval: since...since.addingTimeInterval(6 * 3600), countsDown: false)
+            .monospacedDigit().multilineTextAlignment(.trailing).lineLimit(1)
+    }
+}
+
+private struct Countdown: View {
+    let until: Date
+
+    var body: some View {
+        Text(timerInterval: Date.now...max(until, .now), countsDown: true)
+            .monospacedDigit().multilineTextAlignment(.trailing).lineLimit(1)
     }
 }
 
@@ -124,3 +173,16 @@ private struct RestButtons: View {
         .buttonStyle(.borderedProminent)
     }
 }
+
+#if DEBUG
+#Preview("Lifting", as: .content, using: WorkoutActivityAttributes(focus: "Push", workoutStart: .now.addingTimeInterval(-1460))) {
+    WorkoutLiveActivity()
+} contentStates: {
+    WorkoutActivityAttributes.ContentState(exercise: "Standing barbell overhead press", setLabel: "Set 2 of 3",
+                                           detail: "95 lb × 8", heartRate: 132, restStarted: nil, restUntil: nil,
+                                           onWatch: true, progress: 0.38)
+    WorkoutActivityAttributes.ContentState(exercise: "Barbell bench press", setLabel: "Set 3 of 3",
+                                           detail: "Set 3 · 135 lb × 8", heartRate: 141, restStarted: .now,
+                                           restUntil: .now.addingTimeInterval(90), onWatch: true, progress: 0.5)
+}
+#endif

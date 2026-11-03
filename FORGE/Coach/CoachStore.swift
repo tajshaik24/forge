@@ -27,6 +27,8 @@ final class CoachStore {
     private var minutesOverrides: [String: Int] = [:]
     /// Set when week planning is requested while a pass is already running (true = clear future plans first).
     private var pendingWeekPass: Bool?
+    /// A workout is being saved.
+    private(set) var isFinishing = false
     /// The coach's plan for today, kept while you do your own workout so cancelling puts it back.
     private var setAside: PlannedWorkout?
 
@@ -411,8 +413,18 @@ final class CoachStore {
     // MARK: Finishing
 
     /// Ends the Health workout, copies its stats onto the session, and clears the open session.
+    /// Saves the workout under way. Runs once even if Finish is tapped twice or the Watch ends it at the
+    /// same time. A workout with no sets isn't kept (nil): there's nothing to show in History.
     func finishWorkout(_ ctx: ModelContext) async -> WorkoutSession? {
+        guard !isFinishing else { return nil }
+        isFinishing = true
+        defer { isFinishing = false }
         let result = await WorkoutTracker.shared.finish()
+        if SetLogger.openSessions(in: ctx).first.map({ ($0.sets ?? []).isEmpty }) ?? true {
+            SetLogger.discardOpenSessions(in: ctx)
+            RestAlerts.cancel()
+            return nil
+        }
         let session = SetLogger.openSession(focus: plan?.focus ?? "Workout", gymName: plan?.gymName ?? "", in: ctx)
         // Your own workout is named after the lifts you added, which the first set didn't know yet.
         if let plan, plan.isCustom { session.focus = plan.focus }
@@ -431,6 +443,7 @@ final class CoachStore {
         if SyncedSettings.crewBeta { Task { await CrewService.shared.postCheckIns(from: ctx) } }
         lastFinished = session
         setAside = nil
+        _ = makeContext(ctx)   // readiness now counts this workout
         Task { await replanIfTrainedOffPlan(ctx) }
         return session
     }

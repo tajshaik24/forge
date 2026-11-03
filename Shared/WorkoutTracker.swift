@@ -49,6 +49,10 @@ final class WorkoutTracker: NSObject {
     private var session: HKWorkoutSession?
     private var builder: HKLiveWorkoutBuilder?
     private var lastTimelineSample: Date = .distantPast
+    /// Watch: when heart rate was last sent to the iPhone.
+    private var lastStatsSent: Date = .distantPast
+    /// The workout is being saved: a second Finish does nothing.
+    private(set) var isFinishing = false
     /// iPhone: the Watch's result for a shared workout, once it arrives.
     private var remoteResult: Result?
     private var awaitingRemoteResult = false
@@ -203,7 +207,10 @@ final class WorkoutTracker: NSObject {
                                               "FORGEReps": set.reps])
         try? await builder.addWorkoutEvents([event])
         #if os(watchOS)
-        if isMirrored, notifyOtherDevice { send(.setLogged(set)) }
+        if isMirrored, notifyOtherDevice, await !deliver(.setLogged(set)) {
+            // The iPhone didn't get it: keep it here so it still syncs through iCloud.
+            SetLogger.save(set)
+        }
         #endif
     }
 
@@ -222,6 +229,9 @@ final class WorkoutTracker: NSObject {
     nonisolated static func warmUpKey(_ exercise: String, _ step: Int) -> String { "\(exercise)#\(step)" }
 
     func finish() async -> Result? {
+        guard !isFinishing else { return nil }
+        isFinishing = true
+        defer { isFinishing = false }
         #if os(iOS)
         if isMirrored { return await finishShared() }
         #endif
@@ -311,10 +321,19 @@ final class WorkoutTracker: NSObject {
     // MARK: Messages between the devices
 
     private func send(_ message: MirrorMessage) {
-        guard isMirrored, let session, let data = try? message.encoded() else { return }
-        Task {
-            do { try await session.sendToRemoteWorkoutSession(data: data) }
-            catch { print("FORGE: couldn't reach the other device: \(error.localizedDescription)") }
+        Task { await deliver(message) }
+    }
+
+    /// Sends and reports whether the other device got it.
+    @discardableResult
+    private func deliver(_ message: MirrorMessage) async -> Bool {
+        guard isMirrored, let session, let data = try? message.encoded() else { return false }
+        do {
+            try await session.sendToRemoteWorkoutSession(data: data)
+            return true
+        } catch {
+            print("FORGE: couldn't reach the other device: \(error.localizedDescription)")
+            return false
         }
     }
 
@@ -340,6 +359,15 @@ final class WorkoutTracker: NSObject {
             #endif
         case .warmUps(let done):
             warmUpsDone = Set(done)
+        case .stats(let bpm, let calories):
+            #if os(iOS)
+            heartRate = bpm
+            activeCalories = calories
+            if Date().timeIntervalSince(lastTimelineSample) >= 15, bpm > 0 {
+                heartRateTimeline.append(Int(bpm.rounded()))
+                lastTimelineSample = Date()
+            }
+            #endif
         }
     }
 
@@ -374,6 +402,13 @@ final class WorkoutTracker: NSObject {
             default: break
             }
         }
+        #if os(watchOS)
+        // The iPhone's mirrored builder doesn't stream live stats: send them over.
+        if isMirrored, Date().timeIntervalSince(lastStatsSent) >= 5 {
+            lastStatsSent = Date()
+            send(.stats(heartRate: heartRate, calories: activeCalories))
+        }
+        #endif
     }
 }
 
@@ -445,6 +480,15 @@ enum SetLogger {
         let s = WorkoutSession(focus: focus, gymName: gymName)
         ctx.insert(s)
         return s
+    }
+
+    /// Sets logged in the workout under way (the open session), oldest first. Earlier workouts today don't count.
+    @MainActor
+    static func currentSets(in ctx: ModelContext) -> [WorkoutProgress.DoneSet] {
+        guard let session = openSessions(in: ctx).first else { return [] }
+        return (session.sets ?? []).sorted { $0.date < $1.date }.map {
+            WorkoutProgress.DoneSet(exercise: $0.exercise, weight: $0.weight, reps: $0.reps, rpe: $0.rpe, date: $0.date)
+        }
     }
 
     /// Today's unfinished sessions, newest first.
