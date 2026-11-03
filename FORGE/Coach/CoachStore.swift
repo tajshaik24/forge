@@ -303,6 +303,14 @@ final class CoachStore {
                                calibrate: target == nil && Calibration.applies(to: exercise) ? true : nil)
     }
 
+    #if DEBUG
+    /// Debug screenshots (`-demo -screen …`): today's plan becomes this one.
+    func useDemoPlan(_ demo: PlannedWorkout, _ ctx: ModelContext) {
+        plan = demo
+        DataStore.save(demo, in: ctx)
+    }
+    #endif
+
     // MARK: Your own workout
 
     /// Today becomes your own workout in place of the coach's: it starts empty and you add the lifts.

@@ -45,6 +45,11 @@ struct ExerciseDetailView: View {
                         stat("Sets logged", "\(history.count)")
                     }
                     if let ex = exercise { yourNumbers(ex) }
+                    NavigationLink { LiftProgressView(name: name) } label: {
+                        Label("See your progress", systemImage: "chart.line.uptrend.xyaxis")
+                            .font(.system(size: 15, weight: .semibold))
+                            .frame(minHeight: 44)
+                    }
                 }
             }
             .padding(20)
