@@ -33,8 +33,8 @@ struct PlanView: View {
                             .padding(.horizontal, 10).padding(.vertical, 6)
                             .background(Theme.surface, in: Capsule())
                     }
-                    if SyncedSettings.warmUps, !usedDrills(plan).isEmpty {
-                        drills("Warm-up · built into the workout", usedDrills(plan))
+                    if SyncedSettings.warmUps, !PlanView.usedDrills(plan).isEmpty {
+                        DrillList(title: "Warm-up · built into the workout", items: PlanView.usedDrills(plan))
                     }
                     if !plan.exercises.isEmpty { SectionLabel("Workout") }
                     VStack(spacing: 0) {
@@ -46,7 +46,7 @@ struct PlanView: View {
                             Divider().overlay(Theme.hairline)
                         }
                     }
-                    if !plan.coolDown.isEmpty { drills("Cool-down · optional", plan.coolDown) }
+                    if !plan.coolDown.isEmpty { DrillList(title: "Cool-down · optional", items: plan.coolDown) }
                 }
                 .padding(20)
             }
@@ -67,36 +67,6 @@ struct PlanView: View {
     }
 }
 
-extension PlanView {
-    /// The drills the workout will actually ask for, in order (the warm-up fits in five minutes).
-    func usedDrills(_ plan: PlannedWorkout) -> [PlannedExercise] {
-        let steps = WarmUps.beforeEachLift(plan, unit: SyncedSettings.unit)
-        return plan.exercises.flatMap { steps[$0.name] ?? [] }.compactMap {
-            if case .drill(let d) = $0 { return d } else { return nil }
-        }
-    }
-
-    /// Warm-up or cool-down as a compact list: name and dose, tap for the form guide.
-    func drills(_ title: String, _ items: [PlannedExercise]) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            SectionLabel(title)
-            ForEach(items) { item in
-                NavigationLink { ExerciseDetailView(name: item.name) } label: {
-                    HStack {
-                        Text(item.name).font(.system(size: 15))
-                        Spacer()
-                        Text(item.reps).font(Theme.mono(13)).foregroundStyle(Theme.muted)
-                        Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.muted)
-                    }
-                    .padding(.vertical, 9)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-}
-
 struct ExerciseRow: View {
     let index: Int
     let exercise: PlannedExercise
@@ -106,11 +76,11 @@ struct ExerciseRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Text(String(format: "%02d", index)).font(Theme.mono(13)).foregroundStyle(Theme.muted)
+            Text(String(format: "%02d", index)).font(Theme.mono(13)).foregroundStyle(Theme.muted).frame(width: 20, alignment: .leading)
             VStack(alignment: .leading, spacing: 3) {
                 Text(exercise.name).font(.system(size: 16, weight: .bold))
                 if exercise.calibrate == true {
-                    Text("First Heat: initial benchmarking").font(.system(size: 12)).foregroundStyle(Theme.accentText)
+                    Text("Test sets find your weight").font(.system(size: 12)).foregroundStyle(Theme.accentText).lineLimit(1)
                 } else if let replaced = exercise.replaces {
                     Text("Replaces \(replaced.lowercased())").font(.system(size: 12)).foregroundStyle(Theme.accentText)
                 } else if let note = exercise.target?.note {
@@ -159,6 +129,47 @@ struct FlowRow: Layout {
             s.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
             x += size.width + spacing
             rowHeight = max(rowHeight, size.height)
+        }
+    }
+}
+
+extension PlanView {
+    /// The drills the workout will actually ask for, in order (the warm-up fits in five minutes).
+    static func usedDrills(_ plan: PlannedWorkout) -> [PlannedExercise] {
+        let steps = WarmUps.beforeEachLift(plan, unit: SyncedSettings.unit)
+        return plan.exercises.flatMap { steps[$0.name] ?? [] }.compactMap {
+            if case .drill(let d) = $0 { return d } else { return nil }
+        }
+    }
+}
+
+/// Warm-up or cool-down as a compact list: name and dose, tap for the form guide.
+/// Lines up with `ExerciseRow` when shown next to the lifts.
+struct DrillList: View {
+    let title: String
+    let items: [PlannedExercise]
+    var symbol: String? = nil
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SectionLabel(title).padding(.bottom, 4)
+            ForEach(items) { item in
+                NavigationLink { ExerciseDetailView(name: item.name) } label: {
+                    HStack(spacing: 12) {
+                        if let symbol {
+                            Image(systemName: symbol).font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(Theme.muted).frame(width: 20)
+                        }
+                        Text(item.name).font(.system(size: 15)).lineLimit(2)
+                        Spacer(minLength: 8)
+                        Text(item.reps).font(Theme.mono(13)).foregroundStyle(Theme.muted).fixedSize()
+                        Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.muted)
+                    }
+                    .padding(.vertical, 9)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 }
