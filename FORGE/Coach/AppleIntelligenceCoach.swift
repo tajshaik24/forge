@@ -275,6 +275,13 @@ struct AppleIntelligenceCoach: CoachEngine {
         return try await stream.collect().content
     }
 
+    /// The safety filter blocked the request. iOS 27 throws `LanguageModelError`; the description check
+    /// also catches the older, deprecated `GenerationError` without referencing it.
+    static func isGuardrail(_ error: Error) -> Bool {
+        if case LanguageModelError.guardrailViolation = error { return true }
+        return String(reflecting: error).contains("guardrailViolation")
+    }
+
     func reply(to message: String, context: CoachContext,
                onText: @escaping @MainActor @Sendable (String) -> Void) async throws -> CoachReply {
         // No tools here: facts about the lifts named in the message go straight into the prompt. A tool
@@ -286,7 +293,7 @@ struct AppleIntelligenceCoach: CoachEngine {
         var out: GeneratedReply
         do {
             out = try await respond(CoachPrompts.chat(message, context), onText: onText)
-        } catch LanguageModelSession.GenerationError.guardrailViolation {
+        } catch let error where Self.isGuardrail(error) {
             out = try await respond(CoachPrompts.chat(message, context, minimal: true), onText: onText)
         }
         return ChatDecision.make(message: message, context: context, reply: out.message,

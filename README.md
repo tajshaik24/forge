@@ -9,8 +9,8 @@
 FORGE plans each session from your recovery, schedule, equipment and feedback,<br>
 sets a weight target for every lift, and saves every workout to Apple Health.
 
-![iOS 26+](https://img.shields.io/badge/iOS-26%2B-111214?logo=apple&logoColor=white)
-![watchOS 26+](https://img.shields.io/badge/watchOS-26%2B-111214?logo=apple&logoColor=white)
+![iOS 27+](https://img.shields.io/badge/iOS-27%2B-111214?logo=apple&logoColor=white)
+![watchOS 27+](https://img.shields.io/badge/watchOS-27%2B-111214?logo=apple&logoColor=white)
 ![Swift](https://img.shields.io/badge/Swift-SwiftUI%20%C2%B7%20SwiftData-2443C9?logo=swift&logoColor=white)
 ![AI](https://img.shields.io/badge/AI-Foundation%20Models%20(on--device)-2443C9)
 ![Status](https://img.shields.io/badge/status-pre--alpha-555)
@@ -131,9 +131,9 @@ flowchart LR
 
 ### Requirements
 
-- Xcode 26 or later
-- iPhone with iOS 26+. The AI Coach needs an Apple Intelligence-capable device with Apple Intelligence turned on.
-- Apple Watch with watchOS 26+ (optional)
+- Xcode 27 or later
+- iPhone with iOS 27+. The AI Coach needs an Apple Intelligence-capable device with Apple Intelligence turned on.
+- Apple Watch with watchOS 27+ (optional)
 - An Apple Developer account for iCloud sync, Crews and push. A free account works too, with the `FORGE Personal` scheme: everything except sync and Crews.
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen)
 

@@ -67,7 +67,7 @@ As built, the Live Activity runs while the workout screen is open on the iPhone.
 - Lock Screen + Dynamic Island (compact/minimal/expanded): rest countdown with `Text(timerInterval:)` and `ProgressView(timerInterval:)`, so no per-second updates are needed. When not resting, it shows elapsed workout time and the current set.
 - Buttons (`LiveActivityIntent`): **Skip rest** and **+30 s**. They run in the app process and update the activity, the rest notification and, through §2, the Watch.
 - Started and updated by a `LiveActivityController` the app calls on start, set logged, rest start/end and finish. Updates are local only, since there's no push on the free team. That's enough because the app stays alive in the background during an active workout session.
-- On watchOS 26 the iPhone Live Activity appears in the Watch Smart Stack automatically.
+- On watchOS 26 and later the iPhone Live Activity appears in the Watch Smart Stack automatically.
 
 **Done when:** you lock the phone during rest, the countdown runs on the Lock Screen and in the Dynamic Island, Skip and +30 s work, and the activity ends on Finish.
 

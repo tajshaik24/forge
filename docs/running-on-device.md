@@ -11,7 +11,7 @@ This guide takes you from a fresh clone to FORGE running on your own iPhone and 
 | watchOS app, Simulator + device (`FORGEWatch` scheme) | ✅ builds, 0 warnings |
 | Unit tests (`FORGETests`, iPhone 17 Simulator, iOS 26.5) | ✅ 43 tests in 8 suites pass |
 
-Toolchain: Xcode 27.0 (27A266a), iOS/watchOS 27.0 SDKs, deployment target iOS/watchOS 26.0.
+Toolchain: Xcode 27.0 (27A266a), iOS/watchOS 27.0 SDKs, deployment target iOS/watchOS 27.0.
 
 Fixes made to get here:
 
@@ -42,8 +42,8 @@ xcodebuild -scheme FORGE      -destination 'platform=iOS Simulator,name=iPhone 1
 ## 1. What you need
 
 - **Mac with Xcode 26 or later.** Xcode 27 is installed here.
-- **iPhone on iOS 26+.** The AI Coach needs Apple Intelligence (iPhone 15 Pro or newer) with Apple Intelligence turned on. Without it, the rule-based coach takes over automatically.
-- **Apple Watch on watchOS 26+,** paired to that iPhone (optional).
+- **iPhone on iOS 27+.** The AI Coach needs Apple Intelligence (iPhone 15 Pro or newer) with Apple Intelligence turned on. Without it, the rule-based coach takes over automatically.
+- **Apple Watch on watchOS 27+,** paired to that iPhone (optional).
 - **Apple Developer Program membership ($99/yr).** FORGE uses iCloud/CloudKit, iCloud key-value storage, push notifications (`aps-environment`) and time-sensitive notifications. A free Personal Team can't provision iCloud or push. See [Without a paid account](#without-a-paid-account) for a workaround.
 
 ## 2. Make the project yours
